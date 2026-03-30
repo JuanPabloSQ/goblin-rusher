@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/spider_enemy.gd" id="1_u7qq3"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_8rkj2"]
+radius = 24.0
+
+[node name="EnemySpider" type="Area2D"]
+script = ExtResource("1_u7qq3")
+input_pickable = true
+max_health = 3
+body_color = Color(0.29, 0.27, 0.34, 1)
+eye_color = Color(1, 0.2, 0.14, 1)
+hit_flash_color = Color(1, 0.45, 0.35, 1)
+outline_color = Color(0.06, 0.04, 0.07, 1)
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -2)
+shape = SubResource("CircleShape2D_8rkj2")

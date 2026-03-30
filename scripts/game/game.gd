@@ -1,7 +1,10 @@
 extends Node2D
 
 const BONE_PROJECTILE_SCENE: PackedScene = preload("res://scenes/projectiles/bone_projectile.tscn")
-const ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/enemy_basic.tscn")
+const ENEMY_SCENES: Array[PackedScene] = [
+	preload("res://scenes/enemies/enemy_basic.tscn"),
+	preload("res://scenes/enemies/enemy_spider.tscn"),
+]
 const CLICK_DAMAGE: int = 1
 
 @export var advance_interval: float = 1.25
@@ -18,6 +21,7 @@ const CLICK_DAMAGE: int = 1
 var _depth_slots: Array[Marker2D] = []
 var _current_enemy: Enemy
 var _enemies_defeated: int = 0
+var _next_enemy_scene_index: int = 0
 
 
 func _ready() -> void:
@@ -95,7 +99,10 @@ func _spawn_enemy() -> void:
 	if _depth_slots.is_empty():
 		return
 
-	var enemy_instance: Enemy = ENEMY_SCENE.instantiate() as Enemy
+	var enemy_scene: PackedScene = ENEMY_SCENES[_next_enemy_scene_index]
+	_next_enemy_scene_index = (_next_enemy_scene_index + 1) % ENEMY_SCENES.size()
+
+	var enemy_instance: Enemy = enemy_scene.instantiate() as Enemy
 	enemy_layer.add_child(enemy_instance)
 	enemy_instance.clicked.connect(_on_enemy_clicked)
 	enemy_instance.died.connect(_on_enemy_died)
