@@ -36,10 +36,10 @@ func _draw() -> void:
 
 	var gameplay_bottom: float = viewport_size.y - HUD_HEIGHT
 	var center_x: float = viewport_size.x * 0.5
-	var horizon_y: float = gameplay_bottom * 0.30
-	var corridor_half_width: float = viewport_size.x * 0.12
-	var floor_half_width: float = viewport_size.x * 0.37
-	var runner_half_width: float = viewport_size.x * 0.13
+	var horizon_y: float = gameplay_bottom * 0.43
+	var corridor_half_width: float = viewport_size.x * 0.11
+	var floor_half_width: float = viewport_size.x * 0.34
+	var runner_half_width: float = viewport_size.x * 0.11
 
 	draw_rect(Rect2(Vector2.ZERO, viewport_size), BACKGROUND_COLOR, true)
 
@@ -107,33 +107,51 @@ func _draw() -> void:
 
 	var tunnel_opening: PackedVector2Array = _make_ellipse_points(
 		Vector2(center_x, horizon_y + 4.0),
-		Vector2(22.0, 15.0),
+		Vector2(20.0, 16.0),
 		28
 	)
 	draw_colored_polygon(tunnel_opening, TUNNEL_VOID_COLOR)
 
 	for index in range(6):
-		var ring_t: float = float(index) / 5.0
-		var ring_center: Vector2 = Vector2(
+		var arch_t: float = float(index) / 5.0
+		var arch_center: Vector2 = Vector2(
 			center_x,
-			lerp(horizon_y + 4.0, gameplay_bottom * 0.78, ring_t)
+			lerp(horizon_y - 5.0, gameplay_bottom * 0.52, arch_t)
 		)
-		var ring_radius: Vector2 = Vector2(
-			lerp(26.0, viewport_size.x * 0.36, ring_t),
-			lerp(18.0, gameplay_bottom * 0.28, ring_t)
+		var arch_radius: Vector2 = Vector2(
+			lerp(24.0, viewport_size.x * 0.33, arch_t),
+			lerp(26.0, gameplay_bottom * 0.34, arch_t)
 		)
-		var ring_points: PackedVector2Array = _make_ellipse_points(ring_center, ring_radius, 40)
-		draw_polyline(ring_points, ARCH_COLOR, 3.0 if index >= 3 else 2.0)
+		var arch_points: PackedVector2Array = _make_arc_points(arch_center, arch_radius, PI, TAU, 28)
+		draw_polyline(arch_points, ARCH_COLOR, 3.0 if index >= 3 else 2.0)
 
-	for stripe_index in range(7):
+	for stripe_index in range(6):
 		var stripe_t: float = float(stripe_index) / 6.0
-		var stripe_y: float = lerp(horizon_y + 18.0, gameplay_bottom - 10.0, stripe_t)
-		var stripe_half_width: float = lerp(9.0, viewport_size.x * 0.18, stripe_t)
+		var stripe_y: float = lerp(horizon_y + 14.0, gameplay_bottom - 12.0, stripe_t)
+		var stripe_half_width: float = lerp(6.0, viewport_size.x * 0.11, stripe_t)
 		draw_line(
 			Vector2(center_x - stripe_half_width, stripe_y),
 			Vector2(center_x + stripe_half_width, stripe_y),
 			FLOOR_STRIPE_COLOR,
 			2.0
+		)
+
+	for stage_y in _get_stage_floor_lines(gameplay_bottom):
+		var stage_t: float = inverse_lerp(horizon_y + 10.0, gameplay_bottom, stage_y)
+		var stage_runner_half_width: float = lerp(corridor_half_width * 0.24, runner_half_width * 1.02, stage_t)
+		var stage_floor_half_width: float = lerp(corridor_half_width * 0.62, floor_half_width * 0.92, stage_t)
+
+		draw_line(
+			Vector2(center_x - stage_floor_half_width, stage_y),
+			Vector2(center_x + stage_floor_half_width, stage_y),
+			Color(FLOOR_EDGE_COLOR.r, FLOOR_EDGE_COLOR.g, FLOOR_EDGE_COLOR.b, 0.28),
+			1.0
+		)
+		draw_line(
+			Vector2(center_x - stage_runner_half_width, stage_y),
+			Vector2(center_x + stage_runner_half_width, stage_y),
+			Color(0.85, 0.56, 0.24, 0.95),
+			3.0
 		)
 
 	draw_line(
@@ -166,6 +184,39 @@ func _make_ellipse_points(center: Vector2, radius: Vector2, point_count: int) ->
 		)
 
 	return points
+
+
+func _make_arc_points(center: Vector2, radius: Vector2, start_angle: float, end_angle: float, point_count: int) -> PackedVector2Array:
+	var points: PackedVector2Array = PackedVector2Array()
+
+	for point_index in range(point_count + 1):
+		var t: float = float(point_index) / float(point_count)
+		var angle: float = lerp(start_angle, end_angle, t)
+		points.append(
+			center + Vector2(cos(angle) * radius.x, sin(angle) * radius.y)
+		)
+
+	return points
+
+
+func _get_stage_floor_lines(gameplay_bottom: float) -> Array[float]:
+	var stage_lines: Array[float] = []
+	var parent_node: Node = get_parent()
+
+	if parent_node == null:
+		return stage_lines
+
+	var depth_slots_root: Node = parent_node.get_node_or_null("DepthSlots")
+	if depth_slots_root == null:
+		return stage_lines
+
+	for child in depth_slots_root.get_children():
+		if child is Marker2D:
+			var slot: Marker2D = child as Marker2D
+			var floor_y: float = min(slot.position.y + 12.0 * slot.scale.y, gameplay_bottom - 2.0)
+			stage_lines.append(floor_y)
+
+	return stage_lines
 
 
 func _draw_pillar(center: Vector2, size: Vector2) -> void:
