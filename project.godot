@@ -13,6 +13,14 @@ config_version=5
 config/name="Goblin Rusher"
 config/features=PackedStringArray("4.6", "Forward Plus")
 config/icon="res://icon.svg"
+run/main_scene="res://scenes/main/main.tscn"
+
+[display]
+
+window/size/viewport_width=320
+window/size/viewport_height=180
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
 
 [physics]
 
