@@ -9,6 +9,7 @@ signal died(enemy: Enemy)
 @export var body_color: Color = Color(0.84, 0.82, 0.72)
 @export var eye_color: Color = Color(1.0, 0.2, 0.14)
 @export var hit_flash_color: Color = Color(1.0, 0.45, 0.35)
+@export var outline_color: Color = Color(0.08, 0.05, 0.05)
 
 var _depth_slots: Array[Marker2D] = []
 var _current_slot_index: int = -1
@@ -102,7 +103,10 @@ func _apply_slot(slot_index: int, immediate: bool) -> void:
 	_move_tween = create_tween()
 	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_move_tween.tween_property(self, "global_position", slot.global_position, move_duration)
-	_move_tween.parallel().tween_property(self, "scale", slot.scale, move_duration)
+
+	var pop_scale: Vector2 = slot.scale * 1.12
+	_move_tween.parallel().tween_property(self, "scale", pop_scale, move_duration * 0.72)
+	_move_tween.tween_property(self, "scale", slot.scale, move_duration * 0.18)
 
 
 func _play_hit_flash() -> void:
@@ -152,6 +156,13 @@ func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> voi
 
 func _draw() -> void:
 	draw_circle(Vector2(0.0, 17.0), 18.0, Color(0.0, 0.0, 0.0, 0.35))
+	draw_circle(Vector2(0.0, -20.0), 12.0, outline_color)
+	draw_line(Vector2(0.0, -10.0), Vector2(0.0, 12.0), outline_color, 5.0)
+	draw_line(Vector2(-10.0, -2.0), Vector2(10.0, -2.0), outline_color, 5.0)
+	draw_line(Vector2(-6.0, 12.0), Vector2(-11.0, 29.0), outline_color, 5.0)
+	draw_line(Vector2(6.0, 12.0), Vector2(11.0, 29.0), outline_color, 5.0)
+	draw_line(Vector2(-10.0, -2.0), Vector2(-17.0, 8.0), outline_color, 5.0)
+	draw_line(Vector2(10.0, -2.0), Vector2(17.0, 8.0), outline_color, 5.0)
 	draw_circle(Vector2(0.0, -20.0), 10.0, body_color)
 	draw_line(Vector2(0.0, -10.0), Vector2(0.0, 12.0), body_color, 3.0)
 	draw_line(Vector2(-10.0, -2.0), Vector2(10.0, -2.0), body_color, 3.0)

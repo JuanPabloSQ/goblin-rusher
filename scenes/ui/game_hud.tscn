@@ -10,6 +10,13 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
+[node name="ImpactFlash" type="ColorRect" parent="Root"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(1, 0.74, 0.5, 1)
+modulate = Color(1, 1, 1, 0)
+
 [node name="BottomBar" type="ColorRect" parent="Root"]
 anchor_top = 1.0
 anchor_right = 1.0

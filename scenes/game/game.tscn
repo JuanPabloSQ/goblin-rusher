@@ -13,31 +13,31 @@ script = ExtResource("2_lw77u")
 [node name="DepthSlots" type="Node2D" parent="."]
 
 [node name="Slot00_Far" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 62)
-scale = Vector2(0.28, 0.28)
+position = Vector2(160, 56)
+scale = Vector2(0.22, 0.22)
 
 [node name="Slot01" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 74)
-scale = Vector2(0.42, 0.42)
+position = Vector2(160, 68)
+scale = Vector2(0.34, 0.34)
 
 [node name="Slot02" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 88)
-scale = Vector2(0.6, 0.6)
+position = Vector2(160, 84)
+scale = Vector2(0.5, 0.5)
 
 [node name="Slot03" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 105)
-scale = Vector2(0.82, 0.82)
+position = Vector2(160, 102)
+scale = Vector2(0.74, 0.74)
 
 [node name="Slot04_Near" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 124)
-scale = Vector2(1.1, 1.1)
+position = Vector2(160, 122)
+scale = Vector2(1.08, 1.08)
 
 [node name="EnemyLayer" type="Node2D" parent="."]
 
 [node name="ProjectileLayer" type="Node2D" parent="."]
 
-[node name="ProjectileSpawnPoint" type="Marker2D" parent="."]
-position = Vector2(160, 156)
+[node name="ProjectileSpawnRight" type="Marker2D" parent="."]
+position = Vector2(202, 134)
 
 [node name="GameHud" parent="." instance=ExtResource("3_hw2n7")]
 
