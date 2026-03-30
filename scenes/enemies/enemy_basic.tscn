@@ -7,6 +7,7 @@ radius = 20.0
 
 [node name="EnemyBasic" type="Area2D"]
 script = ExtResource("1_b6f3x")
+input_pickable = true
 monitoring = false
 monitorable = false
 

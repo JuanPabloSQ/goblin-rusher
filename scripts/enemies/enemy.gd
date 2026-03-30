@@ -1,16 +1,28 @@
 class_name Enemy
 extends Area2D
 
+signal clicked(enemy: Enemy)
+signal health_changed(current_health: int, max_health: int)
+signal died(enemy: Enemy)
+
+@export_range(1, 99, 1) var max_health: int = 3
 @export var move_duration: float = 0.4
 @export var body_color: Color = Color(0.84, 0.82, 0.72)
 @export var eye_color: Color = Color(1.0, 0.2, 0.14)
+@export var hit_flash_color: Color = Color(1.0, 0.45, 0.35)
 
 var _depth_slots: Array[Marker2D] = []
 var _current_slot_index: int = -1
+var _current_health: int = 0
+var _is_dead: bool = false
 var _move_tween: Tween
+var _flash_tween: Tween
 
 
 func _ready() -> void:
+	_current_health = max_health
+	input_pickable = true
+	input_event.connect(_on_input_event)
 	queue_redraw()
 
 
@@ -26,7 +38,7 @@ func setup_depth_slots(depth_slots: Array[Marker2D]) -> void:
 
 
 func advance_to_next_slot() -> bool:
-	if _depth_slots.is_empty():
+	if _depth_slots.is_empty() or _is_dead:
 		return false
 
 	if is_at_final_slot():
@@ -40,6 +52,34 @@ func advance_to_next_slot() -> bool:
 
 func is_at_final_slot() -> bool:
 	return not _depth_slots.is_empty() and _current_slot_index >= _depth_slots.size() - 1
+
+
+func is_alive() -> bool:
+	return not _is_dead
+
+
+func get_current_health() -> int:
+	return _current_health
+
+
+func get_projectile_target_position() -> Vector2:
+	return global_position + Vector2(0.0, -18.0 * scale.y)
+
+
+func take_damage(amount: int) -> void:
+	if _is_dead:
+		return
+
+	var applied_damage: int = maxi(amount, 0)
+	if applied_damage <= 0:
+		return
+
+	_current_health = maxi(_current_health - applied_damage, 0)
+	_play_hit_flash()
+	health_changed.emit(_current_health, max_health)
+
+	if _current_health == 0:
+		_die()
 
 
 func _apply_slot(slot_index: int, immediate: bool) -> void:
@@ -58,6 +98,51 @@ func _apply_slot(slot_index: int, immediate: bool) -> void:
 	_move_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	_move_tween.tween_property(self, "global_position", slot.global_position, move_duration)
 	_move_tween.parallel().tween_property(self, "scale", slot.scale, move_duration)
+
+
+func _play_hit_flash() -> void:
+	if is_instance_valid(_flash_tween):
+		_flash_tween.kill()
+
+	modulate = Color.WHITE
+	_flash_tween = create_tween()
+	_flash_tween.tween_property(self, "modulate", hit_flash_color, 0.05)
+	_flash_tween.tween_property(self, "modulate", Color.WHITE, 0.09)
+
+
+func _die() -> void:
+	if _is_dead:
+		return
+
+	_is_dead = true
+	input_pickable = false
+	monitoring = false
+	monitorable = false
+
+	if is_instance_valid(_move_tween):
+		_move_tween.kill()
+
+	if is_instance_valid(_flash_tween):
+		_flash_tween.kill()
+
+	died.emit(self)
+	modulate = hit_flash_color
+
+	var death_tween: Tween = create_tween()
+	death_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	death_tween.tween_property(self, "modulate", Color(hit_flash_color.r, hit_flash_color.g, hit_flash_color.b, 0.0), 0.12)
+	death_tween.parallel().tween_property(self, "scale", scale * 1.12, 0.12)
+	death_tween.tween_callback(Callable(self, "queue_free"))
+
+
+func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
+	if _is_dead:
+		return
+
+	if event is InputEventMouseButton:
+		var mouse_button_event: InputEventMouseButton = event as InputEventMouseButton
+		if mouse_button_event.button_index == MOUSE_BUTTON_LEFT and mouse_button_event.pressed:
+			clicked.emit(self)
 
 
 func _draw() -> void:
