@@ -2,7 +2,6 @@ class_name Enemy
 extends Area2D
 
 signal clicked(enemy: Enemy)
-signal health_changed(current_health: int, max_health: int)
 signal died(enemy: Enemy)
 
 @export_range(1, 99, 1) var max_health: int = 3
@@ -58,12 +57,19 @@ func is_alive() -> bool:
 	return not _is_dead
 
 
-func get_current_health() -> int:
-	return _current_health
-
-
 func get_projectile_target_position() -> Vector2:
 	return global_position + Vector2(0.0, -18.0 * scale.y)
+
+
+func get_current_stage() -> int:
+	if _depth_slots.is_empty():
+		return 0
+
+	return _current_slot_index + 1
+
+
+func get_total_stages() -> int:
+	return _depth_slots.size()
 
 
 func take_damage(amount: int) -> void:
@@ -76,7 +82,6 @@ func take_damage(amount: int) -> void:
 
 	_current_health = maxi(_current_health - applied_damage, 0)
 	_play_hit_flash()
-	health_changed.emit(_current_health, max_health)
 
 	if _current_health == 0:
 		_die()

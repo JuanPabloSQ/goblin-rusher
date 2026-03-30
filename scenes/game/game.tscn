@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/game/game.gd" id="1_8gmm2"]
 [ext_resource type="Script" path="res://scripts/background/corridor_background.gd" id="2_lw77u"]
-[ext_resource type="PackedScene" path="res://scenes/enemies/enemy_basic.tscn" id="3_efw1n"]
+[ext_resource type="PackedScene" path="res://scenes/ui/game_hud.tscn" id="3_hw2n7"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_8gmm2")
@@ -13,43 +13,37 @@ script = ExtResource("2_lw77u")
 [node name="DepthSlots" type="Node2D" parent="."]
 
 [node name="Slot00_Far" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 66)
+position = Vector2(160, 62)
 scale = Vector2(0.28, 0.28)
 
 [node name="Slot01" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 79)
+position = Vector2(160, 74)
 scale = Vector2(0.42, 0.42)
 
 [node name="Slot02" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 96)
+position = Vector2(160, 88)
 scale = Vector2(0.6, 0.6)
 
 [node name="Slot03" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 117)
+position = Vector2(160, 105)
 scale = Vector2(0.82, 0.82)
 
 [node name="Slot04_Near" type="Marker2D" parent="DepthSlots"]
-position = Vector2(160, 140)
+position = Vector2(160, 124)
 scale = Vector2(1.1, 1.1)
 
 [node name="EnemyLayer" type="Node2D" parent="."]
 
-[node name="EnemyBasic" parent="EnemyLayer" instance=ExtResource("3_efw1n")]
-
 [node name="ProjectileLayer" type="Node2D" parent="."]
 
 [node name="ProjectileSpawnPoint" type="Marker2D" parent="."]
-position = Vector2(160, 166)
+position = Vector2(160, 156)
 
-[node name="UI" type="CanvasLayer" parent="."]
-
-[node name="EnemyHealthLabel" type="Label" parent="UI"]
-offset_left = 8.0
-offset_top = 8.0
-offset_right = 180.0
-offset_bottom = 24.0
-modulate = Color(1, 0.95, 0.85, 1)
-text = "Enemy HP: --"
+[node name="GameHud" parent="." instance=ExtResource("3_hw2n7")]
 
 [node name="AdvanceTimer" type="Timer" parent="."]
 wait_time = 1.25
+
+[node name="RespawnTimer" type="Timer" parent="."]
+wait_time = 0.8
+one_shot = true

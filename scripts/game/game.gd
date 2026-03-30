@@ -1,32 +1,39 @@
 extends Node2D
 
 const BONE_PROJECTILE_SCENE: PackedScene = preload("res://scenes/projectiles/bone_projectile.tscn")
+const ENEMY_SCENE: PackedScene = preload("res://scenes/enemies/enemy_basic.tscn")
+const CLICK_DAMAGE: int = 1
 
 @export var advance_interval: float = 1.25
-@export_range(0, 20, 1) var click_damage: int = 1
+@export var respawn_delay: float = 0.8
 
 @onready var depth_slots_root: Node2D = $DepthSlots
-@onready var enemy: Enemy = $EnemyLayer/EnemyBasic
 @onready var projectile_layer: Node2D = $ProjectileLayer
 @onready var projectile_spawn_point: Marker2D = $ProjectileSpawnPoint
-@onready var enemy_health_label: Label = $UI/EnemyHealthLabel
+@onready var enemy_layer: Node2D = $EnemyLayer
+@onready var hud: GameHud = $GameHud
 @onready var advance_timer: Timer = $AdvanceTimer
+@onready var respawn_timer: Timer = $RespawnTimer
+
+var _depth_slots: Array[Marker2D] = []
+var _current_enemy: Enemy
+var _enemies_defeated: int = 0
 
 
 func _ready() -> void:
-	var depth_slots: Array[Marker2D] = _collect_depth_slots()
-	enemy.clicked.connect(_on_enemy_clicked)
-	enemy.health_changed.connect(_on_enemy_health_changed)
-	enemy.died.connect(_on_enemy_died)
-	enemy.setup_depth_slots(depth_slots)
-	_update_enemy_health_label(enemy.get_current_health(), enemy.max_health)
+	_depth_slots = _collect_depth_slots()
+	hud.set_kill_count(_enemies_defeated)
+	hud.set_waiting_for_enemy()
 
-	if depth_slots.size() <= 1:
+	if _depth_slots.is_empty():
 		return
 
 	advance_timer.timeout.connect(_on_advance_timer_timeout)
+	respawn_timer.timeout.connect(_on_respawn_timer_timeout)
 	advance_timer.wait_time = advance_interval
-	advance_timer.start()
+	respawn_timer.wait_time = respawn_delay
+
+	_spawn_enemy()
 
 
 func _collect_depth_slots() -> Array[Marker2D]:
@@ -40,17 +47,18 @@ func _collect_depth_slots() -> Array[Marker2D]:
 
 
 func _on_advance_timer_timeout() -> void:
-	if not is_instance_valid(enemy) or not enemy.is_alive():
+	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive():
 		advance_timer.stop()
 		return
 
-	if enemy.is_at_final_slot():
+	if _current_enemy.is_at_final_slot():
 		advance_timer.stop()
 		return
 
-	enemy.advance_to_next_slot()
+	_current_enemy.advance_to_next_slot()
+	_update_enemy_stage_ui()
 
-	if enemy.is_at_final_slot():
+	if _current_enemy.is_at_final_slot():
 		advance_timer.stop()
 
 
@@ -61,21 +69,43 @@ func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
 	var projectile: BoneProjectile = BONE_PROJECTILE_SCENE.instantiate() as BoneProjectile
 	projectile_layer.add_child(projectile)
 	projectile.global_position = projectile_spawn_point.global_position
-	projectile.setup(clicked_enemy, click_damage)
-
-
-func _on_enemy_health_changed(current_health: int, max_health: int) -> void:
-	_update_enemy_health_label(current_health, max_health)
+	projectile.setup(clicked_enemy, CLICK_DAMAGE)
 
 
 func _on_enemy_died(dead_enemy: Enemy) -> void:
-	advance_timer.stop()
-	_update_enemy_health_label(0, dead_enemy.max_health, true)
-
-
-func _update_enemy_health_label(current_health: int, max_health: int, is_dead: bool = false) -> void:
-	if is_dead:
-		enemy_health_label.text = "Enemy HP: 0/%d DEAD" % max_health
+	if dead_enemy != _current_enemy:
 		return
 
-	enemy_health_label.text = "Enemy HP: %d/%d  DMG: %d" % [current_health, max_health, click_damage]
+	advance_timer.stop()
+	_current_enemy = null
+	_enemies_defeated += 1
+	hud.set_kill_count(_enemies_defeated)
+	hud.set_waiting_for_enemy()
+	respawn_timer.start()
+
+
+func _on_respawn_timer_timeout() -> void:
+	_spawn_enemy()
+
+
+func _spawn_enemy() -> void:
+	if _depth_slots.is_empty():
+		return
+
+	var enemy_instance: Enemy = ENEMY_SCENE.instantiate() as Enemy
+	enemy_layer.add_child(enemy_instance)
+	enemy_instance.clicked.connect(_on_enemy_clicked)
+	enemy_instance.died.connect(_on_enemy_died)
+	enemy_instance.setup_depth_slots(_depth_slots)
+	_current_enemy = enemy_instance
+
+	_update_enemy_stage_ui()
+	advance_timer.start()
+
+
+func _update_enemy_stage_ui() -> void:
+	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive():
+		hud.set_waiting_for_enemy()
+		return
+
+	hud.set_enemy_stage(_current_enemy.get_current_stage(), _current_enemy.get_total_stages())
