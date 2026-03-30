@@ -1,0 +1,17 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/foreground/goblin_hands.gd" id="1_eh1lo"]
+
+[node name="GoblinHands" type="Node2D"]
+script = ExtResource("1_eh1lo")
+
+[node name="LeftHandAnchor" type="Marker2D" parent="."]
+position = Vector2(76, 142)
+rotation = -0.453786
+
+[node name="RightHandAnchor" type="Marker2D" parent="."]
+position = Vector2(242, 142)
+rotation = 0.488692
+
+[node name="RightHandBoneSpawn" type="Marker2D" parent="RightHandAnchor"]
+position = Vector2(3, -36)

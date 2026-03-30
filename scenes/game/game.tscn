@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/game.gd" id="1_8gmm2"]
 [ext_resource type="Script" path="res://scripts/background/corridor_background.gd" id="2_lw77u"]
 [ext_resource type="PackedScene" path="res://scenes/ui/game_hud.tscn" id="3_hw2n7"]
+[ext_resource type="PackedScene" path="res://scenes/foreground/goblin_hands.tscn" id="4_l7t7a"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_8gmm2")
@@ -34,10 +35,9 @@ scale = Vector2(1.08, 1.08)
 
 [node name="EnemyLayer" type="Node2D" parent="."]
 
-[node name="ProjectileLayer" type="Node2D" parent="."]
+[node name="GoblinHands" parent="." instance=ExtResource("4_l7t7a")]
 
-[node name="ProjectileSpawnRight" type="Marker2D" parent="."]
-position = Vector2(202, 134)
+[node name="ProjectileLayer" type="Node2D" parent="."]
 
 [node name="GameHud" parent="." instance=ExtResource("3_hw2n7")]
 

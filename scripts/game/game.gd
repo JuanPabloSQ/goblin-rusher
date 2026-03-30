@@ -8,8 +8,8 @@ const CLICK_DAMAGE: int = 1
 @export var respawn_delay: float = 0.8
 
 @onready var depth_slots_root: Node2D = $DepthSlots
+@onready var goblin_hands: GoblinHands = $GoblinHands
 @onready var projectile_layer: Node2D = $ProjectileLayer
-@onready var projectile_spawn_right: Marker2D = $ProjectileSpawnRight
 @onready var enemy_layer: Node2D = $EnemyLayer
 @onready var hud: GameHud = $GameHud
 @onready var advance_timer: Timer = $AdvanceTimer
@@ -66,10 +66,12 @@ func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
 	if not is_instance_valid(clicked_enemy) or not clicked_enemy.is_alive():
 		return
 
+	goblin_hands.play_throw()
+
 	var projectile: BoneProjectile = BONE_PROJECTILE_SCENE.instantiate() as BoneProjectile
 	projectile_layer.add_child(projectile)
 	projectile.impacted.connect(_on_projectile_impacted)
-	projectile.global_position = projectile_spawn_right.global_position
+	projectile.global_position = goblin_hands.get_right_hand_spawn_global_position()
 	projectile.setup(clicked_enemy, CLICK_DAMAGE)
 
 
