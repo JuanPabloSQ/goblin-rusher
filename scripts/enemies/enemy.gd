@@ -15,6 +15,7 @@ const PATH_FLAG_WALL_LEFT: int = 1 << PathType.WALL_LEFT
 const PATH_FLAG_WALL_RIGHT: int = 1 << PathType.WALL_RIGHT
 
 @export_range(1, 99, 1) var max_health: int = 3
+@export_range(1, 99, 1) var contact_damage: int = 1
 @export var move_duration: float = 0.4
 @export var body_color: Color = Color(0.84, 0.82, 0.72)
 @export var eye_color: Color = Color(1.0, 0.2, 0.14)
@@ -97,6 +98,10 @@ func get_current_stage() -> int:
 
 func get_total_stages() -> int:
 	return _depth_slots.size()
+
+
+func get_contact_damage() -> int:
+	return maxi(contact_damage, 1)
 
 
 func take_damage(amount: int) -> void:

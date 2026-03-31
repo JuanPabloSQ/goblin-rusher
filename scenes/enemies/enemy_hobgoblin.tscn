@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemies/hobgoblin_enemy.gd" id="1_j6j8v"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_6p1f8"]
+radius = 28.0
+
+[node name="EnemyHobgoblin" type="Area2D"]
+script = ExtResource("1_j6j8v")
+input_pickable = true
+max_health = 10
+contact_damage = 2
+body_color = Color(0.52, 0.34, 0.2, 1)
+eye_color = Color(1, 0.18, 0.12, 1)
+hit_flash_color = Color(1, 0.52, 0.32, 1)
+outline_color = Color(0.09, 0.05, 0.03, 1)
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 0)
+shape = SubResource("CircleShape2D_6p1f8")

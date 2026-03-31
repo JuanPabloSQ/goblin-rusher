@@ -2,6 +2,7 @@ class_name GameHud
 extends CanvasLayer
 
 signal restart_requested
+signal resume_requested
 
 @onready var player_health_value_label: Label = $Root/BottomBar/PlayerHealthValueLabel
 @onready var stage_value_label: Label = $Root/BottomBar/StageValueLabel
@@ -10,6 +11,9 @@ signal restart_requested
 @onready var damage_flash: ColorRect = $Root/DamageFlash
 @onready var game_over_overlay: Control = $Root/GameOverOverlay
 @onready var restart_button: Button = $Root/GameOverOverlay/CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RestartButton
+@onready var pause_overlay: Control = $Root/PauseOverlay
+@onready var continue_button: Button = $Root/PauseOverlay/CenterContainer/PanelContainer/MarginContainer/VBoxContainer/ContinueButton
+@onready var pause_restart_button: Button = $Root/PauseOverlay/CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RestartButton
 
 var _impact_flash_tween: Tween
 var _damage_flash_tween: Tween
@@ -17,6 +21,8 @@ var _damage_flash_tween: Tween
 
 func _ready() -> void:
 	restart_button.pressed.connect(_on_restart_button_pressed)
+	continue_button.pressed.connect(_on_continue_button_pressed)
+	pause_restart_button.pressed.connect(_on_restart_button_pressed)
 	reset()
 
 
@@ -51,6 +57,7 @@ func reset() -> void:
 	set_waiting_for_enemy()
 	set_kill_count(0)
 	hide_game_over()
+	hide_pause()
 	impact_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	damage_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
 
@@ -62,6 +69,15 @@ func show_game_over() -> void:
 
 func hide_game_over() -> void:
 	game_over_overlay.visible = false
+
+
+func show_pause() -> void:
+	pause_overlay.visible = true
+	continue_button.grab_focus()
+
+
+func hide_pause() -> void:
+	pause_overlay.visible = false
 
 
 func play_hit_flash() -> void:
@@ -86,3 +102,7 @@ func play_player_hit_feedback() -> void:
 
 func _on_restart_button_pressed() -> void:
 	restart_requested.emit()
+
+
+func _on_continue_button_pressed() -> void:
+	resume_requested.emit()
