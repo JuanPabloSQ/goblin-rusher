@@ -4,6 +4,7 @@ extends CanvasLayer
 signal restart_requested
 signal resume_requested
 signal debug_stage_requested(stage: int)
+signal upgrade_selected(upgrade_id: StringName)
 signal boss_transition_finished
 
 @onready var player_health_value_label: Label = $Root/BottomBar/PlayerHealthValueLabel
@@ -12,6 +13,10 @@ signal boss_transition_finished
 @onready var impact_flash: ColorRect = $Root/ImpactFlash
 @onready var damage_flash: ColorRect = $Root/DamageFlash
 @onready var transition_veil: ColorRect = $Root/TransitionVeil
+@onready var boss_reward_overlay: Control = $Root/BossRewardOverlay
+@onready var chest_button: Button = $Root/BossRewardOverlay/CenterContainer/VBoxContainer/ChestButton
+@onready var reward_panel: PanelContainer = $Root/BossRewardOverlay/CenterContainer/VBoxContainer/RewardPanel
+@onready var hover_upgrade_button: Button = $Root/BossRewardOverlay/CenterContainer/VBoxContainer/RewardPanel/MarginContainer/VBoxContainer/HoverUpgradeButton
 @onready var debug_toggle_button: Button = $Root/BottomBar/DebugToggleButton
 @onready var debug_panel: PanelContainer = $Root/DebugPanel
 @onready var debug_stage_input: LineEdit = $Root/DebugPanel/MarginContainer/VBoxContainer/DebugStageRow/DebugStageInput
@@ -32,6 +37,8 @@ func _ready() -> void:
 	restart_button.pressed.connect(_on_restart_button_pressed)
 	continue_button.pressed.connect(_on_continue_button_pressed)
 	pause_restart_button.pressed.connect(_on_restart_button_pressed)
+	chest_button.pressed.connect(_on_chest_button_pressed)
+	hover_upgrade_button.pressed.connect(_on_hover_upgrade_button_pressed)
 	debug_toggle_button.pressed.connect(_on_debug_toggle_pressed)
 	debug_apply_button.pressed.connect(_on_debug_apply_pressed)
 	debug_stage_input.text_submitted.connect(_on_debug_stage_text_submitted)
@@ -68,6 +75,7 @@ func reset() -> void:
 	hide_debug_panel()
 	hide_game_over()
 	hide_pause()
+	_hide_boss_reward()
 	impact_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	damage_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	transition_veil.visible = false
@@ -105,15 +113,14 @@ func play_boss_transition() -> void:
 	if is_instance_valid(_boss_transition_tween):
 		_boss_transition_tween.kill()
 
+	_hide_boss_reward()
 	transition_veil.visible = true
 	transition_veil.material.set_shader_parameter("wave_progress", 0.0)
 	_boss_transition_tween = create_tween()
 	_boss_transition_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_boss_transition_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_boss_transition_tween.tween_method(_set_transition_wave_progress, 0.0, 1.15, 1.35)
-	_boss_transition_tween.tween_interval(0.35)
-	_boss_transition_tween.tween_method(_set_transition_wave_progress, 1.15, 0.0, 1.45)
-	_boss_transition_tween.tween_callback(Callable(self, "_finish_boss_transition"))
+	_boss_transition_tween.tween_callback(Callable(self, "_show_boss_reward"))
 
 
 func show_debug_panel() -> void:
@@ -138,9 +145,37 @@ func _set_transition_wave_progress(progress: float) -> void:
 
 
 func _finish_boss_transition() -> void:
+	_hide_boss_reward()
 	transition_veil.visible = false
 	transition_veil.material.set_shader_parameter("wave_progress", 0.0)
 	boss_transition_finished.emit()
+
+
+func _show_boss_reward() -> void:
+	boss_reward_overlay.visible = true
+	chest_button.visible = true
+	chest_button.disabled = false
+	reward_panel.visible = false
+	chest_button.grab_focus()
+
+
+func _hide_boss_reward() -> void:
+	boss_reward_overlay.visible = false
+	chest_button.visible = true
+	chest_button.disabled = false
+	reward_panel.visible = false
+
+
+func _continue_boss_transition_after_reward() -> void:
+	if is_instance_valid(_boss_transition_tween):
+		_boss_transition_tween.kill()
+
+	_boss_transition_tween = create_tween()
+	_boss_transition_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_boss_transition_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_boss_transition_tween.tween_interval(0.4)
+	_boss_transition_tween.tween_method(_set_transition_wave_progress, 1.15, 0.0, 1.55)
+	_boss_transition_tween.tween_callback(Callable(self, "_finish_boss_transition"))
 
 
 func play_hit_flash() -> void:
@@ -169,6 +204,18 @@ func _on_restart_button_pressed() -> void:
 
 func _on_continue_button_pressed() -> void:
 	resume_requested.emit()
+
+
+func _on_chest_button_pressed() -> void:
+	chest_button.visible = false
+	reward_panel.visible = true
+	hover_upgrade_button.grab_focus()
+
+
+func _on_hover_upgrade_button_pressed() -> void:
+	upgrade_selected.emit(&"hover_auto_fire")
+	_hide_boss_reward()
+	_continue_boss_transition_after_reward()
 
 
 func _on_debug_toggle_pressed() -> void:

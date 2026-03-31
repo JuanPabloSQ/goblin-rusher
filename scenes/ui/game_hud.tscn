@@ -43,6 +43,57 @@ anchor_bottom = 1.0
 mouse_filter = 2
 color = Color(0, 0, 0, 1)
 
+[node name="BossRewardOverlay" type="Control" parent="Root"]
+visible = false
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 0
+
+[node name="CenterContainer" type="CenterContainer" parent="Root/BossRewardOverlay"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Root/BossRewardOverlay/CenterContainer"]
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="ChestButton" type="Button" parent="Root/BossRewardOverlay/CenterContainer/VBoxContainer"]
+custom_minimum_size = Vector2(88, 56)
+theme_override_font_sizes/font_size = 12
+text = "Cofre"
+
+[node name="RewardPanel" type="PanelContainer" parent="Root/BossRewardOverlay/CenterContainer/VBoxContainer"]
+visible = false
+custom_minimum_size = Vector2(156, 0)
+
+[node name="MarginContainer" type="MarginContainer" parent="Root/BossRewardOverlay/CenterContainer/VBoxContainer/RewardPanel"]
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Root/BossRewardOverlay/CenterContainer/VBoxContainer/RewardPanel/MarginContainer"]
+theme_override_constants/separation = 6
+
+[node name="RewardTitleLabel" type="Label" parent="Root/BossRewardOverlay/CenterContainer/VBoxContainer/RewardPanel/MarginContainer/VBoxContainer"]
+theme_override_colors/font_color = Color(0.98, 0.82, 0.55, 1)
+theme_override_font_sizes/font_size = 10
+horizontal_alignment = 1
+text = "MEJORA"
+
+[node name="RewardDescriptionLabel" type="Label" parent="Root/BossRewardOverlay/CenterContainer/VBoxContainer/RewardPanel/MarginContainer/VBoxContainer"]
+theme_override_colors/font_color = Color(0.95, 0.94, 0.86, 1)
+theme_override_font_sizes/font_size = 8
+autowrap_mode = 2
+horizontal_alignment = 1
+text = "Disparo por hover\nPasa el cursor sobre un enemigo para lanzar huesos automaticamente."
+
+[node name="HoverUpgradeButton" type="Button" parent="Root/BossRewardOverlay/CenterContainer/VBoxContainer/RewardPanel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 28)
+theme_override_font_sizes/font_size = 9
+text = "Tomar mejora"
+
 [node name="BottomBar" type="ColorRect" parent="Root"]
 anchor_top = 1.0
 anchor_right = 1.0

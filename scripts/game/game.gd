@@ -14,6 +14,8 @@ const EARLY_GAME_SPAWN_DELAY: float = 5.0
 const HOBGOBLIN_UNLOCK_STAGE: int = 5
 const ABOMINATION_BOSS_STAGE: int = 10
 const BOSS_TRANSITION_DELAY: float = 2.0
+const HOVER_AUTO_FIRE_UPGRADE: StringName = &"hover_auto_fire"
+const HOVER_AUTO_FIRE_INTERVAL: float = 0.32
 
 @export var advance_interval: float = 1.25
 @export var min_spawn_delay: float = 0.35
@@ -43,6 +45,9 @@ var _damage_shake_tween: Tween
 var _is_game_over: bool = false
 var _is_paused: bool = false
 var _is_boss_transitioning: bool = false
+var _has_hover_auto_fire_upgrade: bool = false
+var _hover_target_enemy: Enemy
+var _hover_auto_fire_cooldown: float = 0.0
 
 
 func _ready() -> void:
@@ -67,6 +72,7 @@ func _ready() -> void:
 	hud.restart_requested.connect(_on_restart_requested)
 	hud.resume_requested.connect(_on_resume_requested)
 	hud.debug_stage_requested.connect(_on_debug_stage_requested)
+	hud.upgrade_selected.connect(_on_upgrade_selected)
 	hud.boss_transition_finished.connect(_on_boss_transition_finished)
 	advance_timer.wait_time = advance_interval
 	enemy_attack_timer.wait_time = ENEMY_ATTACK_INTERVAL
@@ -74,6 +80,27 @@ func _ready() -> void:
 	advance_timer.start()
 	enemy_attack_timer.start()
 	_schedule_next_spawn()
+
+
+func _process(delta: float) -> void:
+	if _hover_auto_fire_cooldown > 0.0:
+		_hover_auto_fire_cooldown = maxf(_hover_auto_fire_cooldown - delta, 0.0)
+
+	if not _has_hover_auto_fire_upgrade:
+		return
+
+	if _is_game_over or _is_paused or _is_boss_transitioning:
+		return
+
+	if not is_instance_valid(_hover_target_enemy) or not _hover_target_enemy.is_alive():
+		_hover_target_enemy = null
+		return
+
+	if _hover_auto_fire_cooldown > 0.0:
+		return
+
+	_fire_projectile_at_enemy(_hover_target_enemy)
+	_hover_auto_fire_cooldown = HOVER_AUTO_FIRE_INTERVAL
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -137,14 +164,7 @@ func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
 	if not is_instance_valid(clicked_enemy) or not clicked_enemy.is_alive():
 		return
 
-	goblin_hands.play_throw()
-
-	var projectile: BoneProjectile = BONE_PROJECTILE_SCENE.instantiate() as BoneProjectile
-	projectile.process_mode = Node.PROCESS_MODE_PAUSABLE
-	projectile_layer.add_child(projectile)
-	projectile.impacted.connect(_on_projectile_impacted)
-	projectile.global_position = goblin_hands.get_right_hand_spawn_global_position()
-	projectile.setup(clicked_enemy, CLICK_DAMAGE)
+	_fire_projectile_at_enemy(clicked_enemy)
 
 
 func _on_enemy_died(dead_enemy: Enemy) -> void:
@@ -246,6 +266,8 @@ func _finish_spawning_enemy(enemy_instance: Enemy, path_type: int) -> void:
 
 	enemy_layer.add_child(enemy_instance)
 	enemy_instance.clicked.connect(_on_enemy_clicked)
+	enemy_instance.hover_started.connect(_on_enemy_hover_started)
+	enemy_instance.hover_ended.connect(_on_enemy_hover_ended)
 	enemy_instance.died.connect(_on_enemy_died)
 	enemy_instance.setup_depth_slots(depth_slots, path_type)
 	_active_enemies.append(enemy_instance)
@@ -321,6 +343,7 @@ func _enter_game_over() -> void:
 	_is_game_over = true
 	_is_paused = false
 	_is_boss_transitioning = false
+	_clear_hover_target()
 	_player_health = 0
 	hud.set_player_health(_player_health)
 	hud.hide_pause()
@@ -357,6 +380,9 @@ func _reset_game_state() -> void:
 	_debug_forced_stage = 0
 	_current_game_stage = 1
 	_player_health = PLAYER_STARTING_HEALTH
+	_has_hover_auto_fire_upgrade = false
+	_hover_auto_fire_cooldown = 0.0
+	_clear_hover_target()
 	position = Vector2.ZERO
 	hud.reset()
 	hud.set_player_health(_player_health)
@@ -379,11 +405,19 @@ func _on_debug_stage_requested(requested_stage: int) -> void:
 	hud.set_debug_feedback("Etapa forzada: %d" % _current_game_stage, Color(0.62, 0.94, 0.48, 1.0))
 
 
+func _on_upgrade_selected(upgrade_id: StringName) -> void:
+	if upgrade_id == HOVER_AUTO_FIRE_UPGRADE:
+		_has_hover_auto_fire_upgrade = true
+		_hover_auto_fire_cooldown = 0.0
+		_clear_hover_target()
+
+
 func _pause_game() -> void:
 	if _is_paused or _is_game_over or _is_boss_transitioning:
 		return
 
 	_is_paused = true
+	_clear_hover_target()
 	get_tree().paused = true
 	hud.show_pause()
 
@@ -457,6 +491,9 @@ func _remove_active_enemy(enemy_to_remove: Enemy) -> void:
 
 	_active_enemies = remaining_enemies
 
+	if _hover_target_enemy == enemy_to_remove:
+		_hover_target_enemy = null
+
 
 func _sort_enemy_by_depth_descending(a: Enemy, b: Enemy) -> bool:
 	return a.get_current_slot_index() > b.get_current_slot_index()
@@ -507,6 +544,7 @@ func _start_boss_transition() -> void:
 		return
 
 	_is_boss_transitioning = true
+	_clear_hover_target()
 	advance_timer.stop()
 	respawn_timer.stop()
 	enemy_attack_timer.stop()
@@ -544,3 +582,36 @@ func _has_active_boss_enemy() -> bool:
 			return true
 
 	return false
+
+
+func _fire_projectile_at_enemy(target_enemy: Enemy) -> void:
+	if not is_instance_valid(target_enemy) or not target_enemy.is_alive():
+		return
+
+	goblin_hands.play_throw()
+
+	var projectile: BoneProjectile = BONE_PROJECTILE_SCENE.instantiate() as BoneProjectile
+	projectile.process_mode = Node.PROCESS_MODE_PAUSABLE
+	projectile_layer.add_child(projectile)
+	projectile.impacted.connect(_on_projectile_impacted)
+	projectile.global_position = goblin_hands.get_right_hand_spawn_global_position()
+	projectile.setup(target_enemy, CLICK_DAMAGE)
+
+
+func _on_enemy_hover_started(enemy: Enemy) -> void:
+	if not _has_hover_auto_fire_upgrade:
+		return
+
+	if not is_instance_valid(enemy) or not enemy.is_alive():
+		return
+
+	_hover_target_enemy = enemy
+
+
+func _on_enemy_hover_ended(enemy: Enemy) -> void:
+	if _hover_target_enemy == enemy:
+		_hover_target_enemy = null
+
+
+func _clear_hover_target() -> void:
+	_hover_target_enemy = null

@@ -2,6 +2,8 @@ class_name Enemy
 extends Area2D
 
 signal clicked(enemy: Enemy)
+signal hover_started(enemy: Enemy)
+signal hover_ended(enemy: Enemy)
 signal died(enemy: Enemy)
 
 enum PathType {
@@ -39,6 +41,8 @@ func _ready() -> void:
 	_current_health = max_health
 	input_pickable = true
 	input_event.connect(_on_input_event)
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 	_on_path_type_changed()
 
 
@@ -224,6 +228,17 @@ func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> voi
 		var mouse_button_event: InputEventMouseButton = event as InputEventMouseButton
 		if mouse_button_event.button_index == MOUSE_BUTTON_LEFT and mouse_button_event.pressed:
 			clicked.emit(self)
+
+
+func _on_mouse_entered() -> void:
+	if _is_dead:
+		return
+
+	hover_started.emit(self)
+
+
+func _on_mouse_exited() -> void:
+	hover_ended.emit(self)
 
 
 func _draw() -> void:
