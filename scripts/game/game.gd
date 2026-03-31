@@ -13,6 +13,7 @@ const EARLY_GAME_MAX_STAGE: int = 10
 const EARLY_GAME_SPAWN_DELAY: float = 5.0
 const HOBGOBLIN_UNLOCK_STAGE: int = 5
 const ABOMINATION_BOSS_STAGE: int = 10
+const BOSS_TRANSITION_DELAY: float = 2.0
 
 @export var advance_interval: float = 1.25
 @export var min_spawn_delay: float = 0.35
@@ -41,6 +42,7 @@ var _player_health: int = PLAYER_STARTING_HEALTH
 var _damage_shake_tween: Tween
 var _is_game_over: bool = false
 var _is_paused: bool = false
+var _is_boss_transitioning: bool = false
 
 
 func _ready() -> void:
@@ -65,6 +67,7 @@ func _ready() -> void:
 	hud.restart_requested.connect(_on_restart_requested)
 	hud.resume_requested.connect(_on_resume_requested)
 	hud.debug_stage_requested.connect(_on_debug_stage_requested)
+	hud.boss_transition_finished.connect(_on_boss_transition_finished)
 	advance_timer.wait_time = advance_interval
 	enemy_attack_timer.wait_time = ENEMY_ATTACK_INTERVAL
 
@@ -77,7 +80,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not event.is_action_pressed("pause_game") or event.is_echo():
 		return
 
-	if _is_game_over:
+	if _is_game_over or _is_boss_transitioning:
 		return
 
 	if _is_paused:
@@ -101,7 +104,7 @@ func _collect_depth_slots(slots_root: Node) -> Array[Marker2D]:
 
 
 func _on_advance_timer_timeout() -> void:
-	if _is_game_over or _is_paused:
+	if _is_game_over or _is_paused or _is_boss_transitioning:
 		return
 
 	_cleanup_inactive_enemies()
@@ -128,7 +131,7 @@ func _advance_path_enemies(path_type: int) -> void:
 
 
 func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
-	if _is_game_over or _is_paused:
+	if _is_game_over or _is_paused or _is_boss_transitioning:
 		return
 
 	if not is_instance_valid(clicked_enemy) or not clicked_enemy.is_alive():
@@ -149,12 +152,16 @@ func _on_enemy_died(dead_enemy: Enemy) -> void:
 	_enemies_defeated += 1
 	_refresh_stage_state()
 
+	if dead_enemy.is_boss_enemy():
+		_start_boss_transition()
+		return
+
 	if not _is_game_over and not _is_paused and respawn_timer.is_stopped():
 		_schedule_next_spawn()
 
 
 func _on_respawn_timer_timeout() -> void:
-	if _is_game_over or _is_paused:
+	if _is_game_over or _is_paused or _is_boss_transitioning:
 		return
 
 	if _has_active_boss_enemy():
@@ -245,14 +252,14 @@ func _finish_spawning_enemy(enemy_instance: Enemy, path_type: int) -> void:
 
 
 func _on_projectile_impacted() -> void:
-	if _is_game_over or _is_paused:
+	if _is_game_over or _is_paused or _is_boss_transitioning:
 		return
 
 	hud.play_hit_flash()
 
 
 func _on_enemy_attack_timer_timeout() -> void:
-	if _is_game_over or _is_paused:
+	if _is_game_over or _is_paused or _is_boss_transitioning:
 		return
 
 	_cleanup_inactive_enemies()
@@ -282,7 +289,7 @@ func _get_depth_slots_for_path(path_type: int) -> Array[Marker2D]:
 
 
 func _apply_player_damage(amount: int) -> void:
-	if _is_game_over or _is_paused or amount <= 0 or _player_health <= 0:
+	if _is_game_over or _is_paused or _is_boss_transitioning or amount <= 0 or _player_health <= 0:
 		return
 
 	_player_health = maxi(_player_health - amount, 0)
@@ -313,6 +320,7 @@ func _enter_game_over() -> void:
 
 	_is_game_over = true
 	_is_paused = false
+	_is_boss_transitioning = false
 	_player_health = 0
 	hud.set_player_health(_player_health)
 	hud.hide_pause()
@@ -343,6 +351,7 @@ func _reset_game_state() -> void:
 	get_tree().paused = false
 	_is_game_over = false
 	_is_paused = false
+	_is_boss_transitioning = false
 	_active_enemies.clear()
 	_enemies_defeated = 0
 	_debug_forced_stage = 0
@@ -371,7 +380,7 @@ func _on_debug_stage_requested(requested_stage: int) -> void:
 
 
 func _pause_game() -> void:
-	if _is_paused or _is_game_over:
+	if _is_paused or _is_game_over or _is_boss_transitioning:
 		return
 
 	_is_paused = true
@@ -491,6 +500,34 @@ func _get_enemy_pool_for_current_stage() -> Array[PackedScene]:
 		enemy_pool.append(ENEMY_HOBGOBLIN_SCENE)
 
 	return enemy_pool
+
+
+func _start_boss_transition() -> void:
+	if _is_game_over or _is_boss_transitioning:
+		return
+
+	_is_boss_transitioning = true
+	advance_timer.stop()
+	respawn_timer.stop()
+	enemy_attack_timer.stop()
+
+	for projectile in projectile_layer.get_children():
+		projectile.queue_free()
+
+	var transition_delay_tween: Tween = create_tween()
+	transition_delay_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	transition_delay_tween.tween_interval(BOSS_TRANSITION_DELAY)
+	transition_delay_tween.tween_callback(Callable(hud, "play_boss_transition"))
+
+
+func _on_boss_transition_finished() -> void:
+	if _is_game_over:
+		return
+
+	_is_boss_transitioning = false
+	advance_timer.start()
+	enemy_attack_timer.start()
+	_schedule_next_spawn()
 
 
 func _should_spawn_abomination_boss() -> bool:

@@ -4,12 +4,14 @@ extends CanvasLayer
 signal restart_requested
 signal resume_requested
 signal debug_stage_requested(stage: int)
+signal boss_transition_finished
 
 @onready var player_health_value_label: Label = $Root/BottomBar/PlayerHealthValueLabel
 @onready var stage_value_label: Label = $Root/BottomBar/StageValueLabel
 @onready var kills_value_label: Label = $Root/BottomBar/KillsValueLabel
 @onready var impact_flash: ColorRect = $Root/ImpactFlash
 @onready var damage_flash: ColorRect = $Root/DamageFlash
+@onready var transition_veil: ColorRect = $Root/TransitionVeil
 @onready var debug_toggle_button: Button = $Root/BottomBar/DebugToggleButton
 @onready var debug_panel: PanelContainer = $Root/DebugPanel
 @onready var debug_stage_input: LineEdit = $Root/DebugPanel/MarginContainer/VBoxContainer/DebugStageRow/DebugStageInput
@@ -23,6 +25,7 @@ signal debug_stage_requested(stage: int)
 
 var _impact_flash_tween: Tween
 var _damage_flash_tween: Tween
+var _boss_transition_tween: Tween
 
 
 func _ready() -> void:
@@ -54,6 +57,9 @@ func reset() -> void:
 	if is_instance_valid(_damage_flash_tween):
 		_damage_flash_tween.kill()
 
+	if is_instance_valid(_boss_transition_tween):
+		_boss_transition_tween.kill()
+
 	set_player_health(10)
 	set_game_stage(1)
 	set_kill_count(0)
@@ -64,6 +70,8 @@ func reset() -> void:
 	hide_pause()
 	impact_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
 	damage_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	transition_veil.visible = false
+	transition_veil.material.set_shader_parameter("wave_progress", 0.0)
 
 
 func show_game_over() -> void:
@@ -93,6 +101,21 @@ func set_debug_feedback(message: String, color: Color = Color(0.8, 0.78, 0.66, 0
 	debug_feedback_label.modulate = color
 
 
+func play_boss_transition() -> void:
+	if is_instance_valid(_boss_transition_tween):
+		_boss_transition_tween.kill()
+
+	transition_veil.visible = true
+	transition_veil.material.set_shader_parameter("wave_progress", 0.0)
+	_boss_transition_tween = create_tween()
+	_boss_transition_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
+	_boss_transition_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_boss_transition_tween.tween_method(_set_transition_wave_progress, 0.0, 1.15, 1.35)
+	_boss_transition_tween.tween_interval(0.35)
+	_boss_transition_tween.tween_method(_set_transition_wave_progress, 1.15, 0.0, 1.45)
+	_boss_transition_tween.tween_callback(Callable(self, "_finish_boss_transition"))
+
+
 func show_debug_panel() -> void:
 	debug_panel.visible = true
 	debug_stage_input.grab_focus()
@@ -108,6 +131,16 @@ func toggle_debug_panel() -> void:
 	if debug_panel.visible:
 		debug_stage_input.grab_focus()
 		debug_stage_input.caret_column = debug_stage_input.text.length()
+
+
+func _set_transition_wave_progress(progress: float) -> void:
+	transition_veil.material.set_shader_parameter("wave_progress", progress)
+
+
+func _finish_boss_transition() -> void:
+	transition_veil.visible = false
+	transition_veil.material.set_shader_parameter("wave_progress", 0.0)
+	boss_transition_finished.emit()
 
 
 func play_hit_flash() -> void:

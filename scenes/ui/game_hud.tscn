@@ -1,6 +1,16 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/game_hud.gd" id="1_4jlwm"]
+
+[sub_resource type="Shader" id="Shader_hg1r2"]
+code = "shader_type canvas_item;\n\nuniform float wave_progress : hint_range(0.0, 1.2) = 0.0;\nuniform vec2 source_uv = vec2(0.5, 0.22);\nuniform float edge_softness = 0.16;\nuniform vec4 veil_color : source_color = vec4(0.0, 0.0, 0.0, 0.96);\n\nvoid fragment() {\n\tvec2 scaled_uv = vec2(UV.x, UV.y * 1.15);\n\tvec2 scaled_source = vec2(source_uv.x, source_uv.y * 1.15);\n\tfloat dist = distance(scaled_uv, scaled_source);\n\tfloat alpha = 1.0 - smoothstep(max(wave_progress - edge_softness, 0.0), wave_progress + edge_softness, dist);\n\talpha *= veil_color.a;\n\tCOLOR = vec4(veil_color.rgb, alpha);\n}\n"
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_3xd8q"]
+shader = SubResource("Shader_hg1r2")
+shader_parameter/wave_progress = 0.0
+shader_parameter/source_uv = Vector2(0.5, 0.22)
+shader_parameter/edge_softness = 0.16
+shader_parameter/veil_color = Color(0, 0, 0, 0.96)
 
 [node name="GameHud" type="CanvasLayer"]
 script = ExtResource("1_4jlwm")
@@ -24,6 +34,14 @@ anchor_bottom = 1.0
 mouse_filter = 2
 color = Color(0.95, 0.18, 0.14, 1)
 modulate = Color(1, 1, 1, 0)
+
+[node name="TransitionVeil" type="ColorRect" parent="Root"]
+visible = false
+material = SubResource("ShaderMaterial_3xd8q")
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
 
 [node name="BottomBar" type="ColorRect" parent="Root"]
 anchor_top = 1.0
