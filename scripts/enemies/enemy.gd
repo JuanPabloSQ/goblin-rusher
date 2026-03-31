@@ -4,17 +4,29 @@ extends Area2D
 signal clicked(enemy: Enemy)
 signal died(enemy: Enemy)
 
+enum PathType {
+	CENTER,
+	WALL_LEFT,
+	WALL_RIGHT,
+}
+
+const PATH_FLAG_CENTER: int = 1 << PathType.CENTER
+const PATH_FLAG_WALL_LEFT: int = 1 << PathType.WALL_LEFT
+const PATH_FLAG_WALL_RIGHT: int = 1 << PathType.WALL_RIGHT
+
 @export_range(1, 99, 1) var max_health: int = 3
 @export var move_duration: float = 0.4
 @export var body_color: Color = Color(0.84, 0.82, 0.72)
 @export var eye_color: Color = Color(1.0, 0.2, 0.14)
 @export var hit_flash_color: Color = Color(1.0, 0.45, 0.35)
 @export var outline_color: Color = Color(0.08, 0.05, 0.05)
+@export_flags("Centro", "Muralla izquierda", "Muralla derecha") var allowed_paths: int = PATH_FLAG_CENTER
 
 var _depth_slots: Array[Marker2D] = []
 var _current_slot_index: int = -1
 var _current_health: int = 0
 var _is_dead: bool = false
+var _path_type: int = PathType.CENTER
 var _move_tween: Tween
 var _flash_tween: Tween
 
@@ -23,12 +35,14 @@ func _ready() -> void:
 	_current_health = max_health
 	input_pickable = true
 	input_event.connect(_on_input_event)
-	queue_redraw()
+	_on_path_type_changed()
 
 
-func setup_depth_slots(depth_slots: Array[Marker2D]) -> void:
+func setup_depth_slots(depth_slots: Array[Marker2D], path_type: int = PathType.CENTER) -> void:
 	_depth_slots.clear()
 	_depth_slots.append_array(depth_slots)
+	_path_type = path_type
+	_on_path_type_changed()
 
 	if _depth_slots.is_empty():
 		return
@@ -56,6 +70,18 @@ func is_at_final_slot() -> bool:
 
 func is_alive() -> bool:
 	return not _is_dead
+
+
+func can_use_path(path_type: int) -> bool:
+	return (allowed_paths & (1 << path_type)) != 0
+
+
+func get_path_type() -> int:
+	return _path_type
+
+
+func is_wall_path() -> bool:
+	return _path_type == PathType.WALL_LEFT or _path_type == PathType.WALL_RIGHT
 
 
 func get_projectile_target_position() -> Vector2:
@@ -142,6 +168,10 @@ func _die() -> void:
 	death_tween.tween_property(self, "modulate", Color(hit_flash_color.r, hit_flash_color.g, hit_flash_color.b, 0.0), 0.12)
 	death_tween.parallel().tween_property(self, "scale", scale * 1.12, 0.12)
 	death_tween.tween_callback(Callable(self, "queue_free"))
+
+
+func _on_path_type_changed() -> void:
+	queue_redraw()
 
 
 func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:

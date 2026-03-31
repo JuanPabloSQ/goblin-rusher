@@ -154,6 +154,12 @@ func _draw() -> void:
 			3.0
 		)
 
+	for wall_slot in _get_route_slots("WallLeftSlots"):
+		_draw_wall_stage_mark(wall_slot.position, true)
+
+	for wall_slot in _get_route_slots("WallRightSlots"):
+		_draw_wall_stage_mark(wall_slot.position, false)
+
 	draw_line(
 		Vector2(center_x - floor_half_width * 0.96, gameplay_bottom),
 		Vector2(center_x - corridor_half_width, horizon_y),
@@ -201,22 +207,29 @@ func _make_arc_points(center: Vector2, radius: Vector2, start_angle: float, end_
 
 func _get_stage_floor_lines(gameplay_bottom: float) -> Array[float]:
 	var stage_lines: Array[float] = []
+	for slot in _get_route_slots("CenterSlots"):
+		var floor_y: float = min(slot.position.y + 12.0 * slot.scale.y, gameplay_bottom - 2.0)
+		stage_lines.append(floor_y)
+
+	return stage_lines
+
+
+func _get_route_slots(route_root_name: String) -> Array[Marker2D]:
+	var route_slots: Array[Marker2D] = []
 	var parent_node: Node = get_parent()
 
 	if parent_node == null:
-		return stage_lines
+		return route_slots
 
-	var depth_slots_root: Node = parent_node.get_node_or_null("DepthSlots")
-	if depth_slots_root == null:
-		return stage_lines
+	var route_root: Node = parent_node.get_node_or_null("DepthSlots/%s" % route_root_name)
+	if route_root == null:
+		return route_slots
 
-	for child in depth_slots_root.get_children():
+	for child in route_root.get_children():
 		if child is Marker2D:
-			var slot: Marker2D = child as Marker2D
-			var floor_y: float = min(slot.position.y + 12.0 * slot.scale.y, gameplay_bottom - 2.0)
-			stage_lines.append(floor_y)
+			route_slots.append(child as Marker2D)
 
-	return stage_lines
+	return route_slots
 
 
 func _draw_pillar(center: Vector2, size: Vector2) -> void:
@@ -244,6 +257,15 @@ func _draw_rubble(center: Vector2, width: float) -> void:
 		var x_offset: float = (float(offset_index) - 1.5) * width * 0.22
 		var y_offset: float = abs(float(offset_index) - 1.5) * 1.5
 		draw_circle(center + Vector2(x_offset, y_offset), 5.0 - abs(float(offset_index) - 1.5), SIDE_RUBBLE_COLOR)
+
+
+func _draw_wall_stage_mark(position: Vector2, is_left_wall: bool) -> void:
+	var horizontal_sign: float = 1.0 if is_left_wall else -1.0
+	var mark_color: Color = Color(0.79, 0.45, 0.23, 0.52)
+	var mark_start: Vector2 = position + Vector2(-6.0 * horizontal_sign, -6.0)
+	var mark_end: Vector2 = position + Vector2(10.0 * horizontal_sign, 6.0)
+	draw_line(mark_start, mark_end, mark_color, 2.0)
+	draw_circle(position + Vector2(4.0 * horizontal_sign, 0.0), 1.6, Color(0.95, 0.72, 0.38, 0.78))
 
 
 func _draw_vignette(viewport_size: Vector2, gameplay_bottom: float) -> void:

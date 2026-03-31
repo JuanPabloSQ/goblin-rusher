@@ -10,7 +10,9 @@ const CLICK_DAMAGE: int = 1
 @export var advance_interval: float = 1.25
 @export var respawn_delay: float = 0.8
 
-@onready var depth_slots_root: Node2D = $DepthSlots
+@onready var center_slots_root: Node2D = $DepthSlots/CenterSlots
+@onready var wall_left_slots_root: Node2D = $DepthSlots/WallLeftSlots
+@onready var wall_right_slots_root: Node2D = $DepthSlots/WallRightSlots
 @onready var goblin_hands: GoblinHands = $GoblinHands
 @onready var projectile_layer: Node2D = $ProjectileLayer
 @onready var enemy_layer: Node2D = $EnemyLayer
@@ -18,18 +20,23 @@ const CLICK_DAMAGE: int = 1
 @onready var advance_timer: Timer = $AdvanceTimer
 @onready var respawn_timer: Timer = $RespawnTimer
 
-var _depth_slots: Array[Marker2D] = []
+var _center_depth_slots: Array[Marker2D] = []
+var _wall_left_depth_slots: Array[Marker2D] = []
+var _wall_right_depth_slots: Array[Marker2D] = []
 var _current_enemy: Enemy
 var _enemies_defeated: int = 0
 var _next_enemy_scene_index: int = 0
+var _next_wall_path_type: int = Enemy.PathType.WALL_LEFT
 
 
 func _ready() -> void:
-	_depth_slots = _collect_depth_slots()
+	_center_depth_slots = _collect_depth_slots(center_slots_root)
+	_wall_left_depth_slots = _collect_depth_slots(wall_left_slots_root)
+	_wall_right_depth_slots = _collect_depth_slots(wall_right_slots_root)
 	hud.set_kill_count(_enemies_defeated)
 	hud.set_waiting_for_enemy()
 
-	if _depth_slots.is_empty():
+	if _center_depth_slots.is_empty():
 		return
 
 	advance_timer.timeout.connect(_on_advance_timer_timeout)
@@ -40,10 +47,13 @@ func _ready() -> void:
 	_spawn_enemy()
 
 
-func _collect_depth_slots() -> Array[Marker2D]:
+func _collect_depth_slots(slots_root: Node) -> Array[Marker2D]:
 	var depth_slots: Array[Marker2D] = []
 
-	for child in depth_slots_root.get_children():
+	if slots_root == null:
+		return depth_slots
+
+	for child in slots_root.get_children():
 		if child is Marker2D:
 			depth_slots.append(child as Marker2D)
 
@@ -96,17 +106,24 @@ func _on_respawn_timer_timeout() -> void:
 
 
 func _spawn_enemy() -> void:
-	if _depth_slots.is_empty():
+	if _center_depth_slots.is_empty():
 		return
 
 	var enemy_scene: PackedScene = ENEMY_SCENES[_next_enemy_scene_index]
 	_next_enemy_scene_index = (_next_enemy_scene_index + 1) % ENEMY_SCENES.size()
 
 	var enemy_instance: Enemy = enemy_scene.instantiate() as Enemy
+	var path_type: int = _choose_spawn_path(enemy_instance)
+	var depth_slots: Array[Marker2D] = _get_depth_slots_for_path(path_type)
+
+	if depth_slots.is_empty():
+		depth_slots = _center_depth_slots
+		path_type = Enemy.PathType.CENTER
+
 	enemy_layer.add_child(enemy_instance)
 	enemy_instance.clicked.connect(_on_enemy_clicked)
 	enemy_instance.died.connect(_on_enemy_died)
-	enemy_instance.setup_depth_slots(_depth_slots)
+	enemy_instance.setup_depth_slots(depth_slots, path_type)
 	_current_enemy = enemy_instance
 
 	_update_enemy_stage_ui()
@@ -123,3 +140,31 @@ func _update_enemy_stage_ui() -> void:
 
 func _on_projectile_impacted() -> void:
 	hud.play_hit_flash()
+
+
+func _choose_spawn_path(enemy_instance: Enemy) -> int:
+	var available_paths: Array[int] = []
+
+	for path_type in [Enemy.PathType.CENTER, Enemy.PathType.WALL_LEFT, Enemy.PathType.WALL_RIGHT]:
+		if enemy_instance.can_use_path(path_type) and not _get_depth_slots_for_path(path_type).is_empty():
+			available_paths.append(path_type)
+
+	if available_paths.is_empty():
+		return Enemy.PathType.CENTER
+
+	if available_paths.has(_next_wall_path_type):
+		var chosen_wall_path: int = _next_wall_path_type
+		_next_wall_path_type = Enemy.PathType.WALL_RIGHT if _next_wall_path_type == Enemy.PathType.WALL_LEFT else Enemy.PathType.WALL_LEFT
+		return chosen_wall_path
+
+	return available_paths[0]
+
+
+func _get_depth_slots_for_path(path_type: int) -> Array[Marker2D]:
+	match path_type:
+		Enemy.PathType.WALL_LEFT:
+			return _wall_left_depth_slots
+		Enemy.PathType.WALL_RIGHT:
+			return _wall_right_depth_slots
+		_:
+			return _center_depth_slots
