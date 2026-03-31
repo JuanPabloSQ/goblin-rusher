@@ -17,6 +17,13 @@ mouse_filter = 2
 color = Color(1, 0.74, 0.5, 1)
 modulate = Color(1, 1, 1, 0)
 
+[node name="DamageFlash" type="ColorRect" parent="Root"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.95, 0.18, 0.14, 1)
+modulate = Color(1, 1, 1, 0)
+
 [node name="BottomBar" type="ColorRect" parent="Root"]
 anchor_top = 1.0
 anchor_right = 1.0
@@ -65,37 +72,55 @@ theme_override_colors/font_color = Color(0.98, 0.82, 0.55, 1)
 theme_override_font_sizes/font_size = 9
 text = "GOBLIN"
 
+[node name="PlayerHealthTitleLabel" type="Label" parent="Root/BottomBar"]
+offset_left = 46.0
+offset_top = 20.0
+offset_right = 82.0
+offset_bottom = 32.0
+theme_override_colors/font_color = Color(0.98, 0.82, 0.55, 1)
+theme_override_font_sizes/font_size = 9
+text = "VIDA"
+
+[node name="PlayerHealthValueLabel" type="Label" parent="Root/BottomBar"]
+offset_left = 78.0
+offset_top = 18.0
+offset_right = 118.0
+offset_bottom = 34.0
+theme_override_colors/font_color = Color(0.95, 0.94, 0.86, 1)
+theme_override_font_sizes/font_size = 12
+text = "10"
+
 [node name="StageTitleLabel" type="Label" parent="Root/BottomBar"]
-offset_left = 112.0
+offset_left = 124.0
 offset_top = 8.0
-offset_right = 170.0
+offset_right = 182.0
 offset_bottom = 20.0
 theme_override_colors/font_color = Color(0.98, 0.82, 0.55, 1)
 theme_override_font_sizes/font_size = 9
 text = "ETAPA"
 
 [node name="StageValueLabel" type="Label" parent="Root/BottomBar"]
-offset_left = 112.0
+offset_left = 124.0
 offset_top = 20.0
-offset_right = 178.0
+offset_right = 190.0
 offset_bottom = 34.0
 theme_override_colors/font_color = Color(0.95, 0.94, 0.86, 1)
 theme_override_font_sizes/font_size = 12
 text = "-- / --"
 
 [node name="KillsTitleLabel" type="Label" parent="Root/BottomBar"]
-offset_left = 196.0
+offset_left = 208.0
 offset_top = 8.0
-offset_right = 286.0
+offset_right = 308.0
 offset_bottom = 20.0
 theme_override_colors/font_color = Color(0.98, 0.82, 0.55, 1)
 theme_override_font_sizes/font_size = 9
 text = "ELIMINADOS"
 
 [node name="KillsValueLabel" type="Label" parent="Root/BottomBar"]
-offset_left = 196.0
+offset_left = 208.0
 offset_top = 20.0
-offset_right = 284.0
+offset_right = 306.0
 offset_bottom = 34.0
 theme_override_colors/font_color = Color(0.95, 0.94, 0.86, 1)
 theme_override_font_sizes/font_size = 12

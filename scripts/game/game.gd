@@ -6,6 +6,9 @@ const ENEMY_SCENES: Array[PackedScene] = [
 	preload("res://scenes/enemies/enemy_spider.tscn"),
 ]
 const CLICK_DAMAGE: int = 1
+const PLAYER_STARTING_HEALTH: int = 10
+const ENEMY_CONTACT_DAMAGE: int = 1
+const ENEMY_ATTACK_INTERVAL: float = 2.0
 
 @export var advance_interval: float = 1.25
 @export var respawn_delay: float = 0.8
@@ -19,6 +22,7 @@ const CLICK_DAMAGE: int = 1
 @onready var hud: GameHud = $GameHud
 @onready var advance_timer: Timer = $AdvanceTimer
 @onready var respawn_timer: Timer = $RespawnTimer
+@onready var enemy_attack_timer: Timer = $EnemyAttackTimer
 
 var _center_depth_slots: Array[Marker2D] = []
 var _wall_left_depth_slots: Array[Marker2D] = []
@@ -27,12 +31,16 @@ var _current_enemy: Enemy
 var _enemies_defeated: int = 0
 var _next_enemy_scene_index: int = 0
 var _next_wall_path_type: int = Enemy.PathType.WALL_LEFT
+var _player_health: int = PLAYER_STARTING_HEALTH
+var _damage_shake_tween: Tween
 
 
 func _ready() -> void:
 	_center_depth_slots = _collect_depth_slots(center_slots_root)
 	_wall_left_depth_slots = _collect_depth_slots(wall_left_slots_root)
 	_wall_right_depth_slots = _collect_depth_slots(wall_right_slots_root)
+	_player_health = PLAYER_STARTING_HEALTH
+	hud.set_player_health(_player_health)
 	hud.set_kill_count(_enemies_defeated)
 	hud.set_waiting_for_enemy()
 
@@ -41,8 +49,10 @@ func _ready() -> void:
 
 	advance_timer.timeout.connect(_on_advance_timer_timeout)
 	respawn_timer.timeout.connect(_on_respawn_timer_timeout)
+	enemy_attack_timer.timeout.connect(_on_enemy_attack_timer_timeout)
 	advance_timer.wait_time = advance_interval
 	respawn_timer.wait_time = respawn_delay
+	enemy_attack_timer.wait_time = ENEMY_ATTACK_INTERVAL
 
 	_spawn_enemy()
 
@@ -71,6 +81,7 @@ func _on_advance_timer_timeout() -> void:
 
 	_current_enemy.advance_to_next_slot()
 	_update_enemy_stage_ui()
+	_update_enemy_attack_state()
 
 	if _current_enemy.is_at_final_slot():
 		advance_timer.stop()
@@ -94,6 +105,7 @@ func _on_enemy_died(dead_enemy: Enemy) -> void:
 		return
 
 	advance_timer.stop()
+	enemy_attack_timer.stop()
 	_current_enemy = null
 	_enemies_defeated += 1
 	hud.set_kill_count(_enemies_defeated)
@@ -108,6 +120,8 @@ func _on_respawn_timer_timeout() -> void:
 func _spawn_enemy() -> void:
 	if _center_depth_slots.is_empty():
 		return
+
+	enemy_attack_timer.stop()
 
 	var enemy_scene: PackedScene = ENEMY_SCENES[_next_enemy_scene_index]
 	_next_enemy_scene_index = (_next_enemy_scene_index + 1) % ENEMY_SCENES.size()
@@ -127,6 +141,7 @@ func _spawn_enemy() -> void:
 	_current_enemy = enemy_instance
 
 	_update_enemy_stage_ui()
+	_update_enemy_attack_state()
 	advance_timer.start()
 
 
@@ -140,6 +155,17 @@ func _update_enemy_stage_ui() -> void:
 
 func _on_projectile_impacted() -> void:
 	hud.play_hit_flash()
+
+
+func _on_enemy_attack_timer_timeout() -> void:
+	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive() or not _current_enemy.is_at_final_slot():
+		enemy_attack_timer.stop()
+		return
+
+	_apply_player_damage(ENEMY_CONTACT_DAMAGE)
+
+	if _player_health <= 0:
+		enemy_attack_timer.stop()
 
 
 func _choose_spawn_path(enemy_instance: Enemy) -> int:
@@ -168,3 +194,35 @@ func _get_depth_slots_for_path(path_type: int) -> Array[Marker2D]:
 			return _wall_right_depth_slots
 		_:
 			return _center_depth_slots
+
+
+func _update_enemy_attack_state() -> void:
+	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive() or not _current_enemy.is_at_final_slot() or _player_health <= 0:
+		enemy_attack_timer.stop()
+		return
+
+	if enemy_attack_timer.is_stopped():
+		enemy_attack_timer.start()
+
+
+func _apply_player_damage(amount: int) -> void:
+	if amount <= 0 or _player_health <= 0:
+		return
+
+	_player_health = maxi(_player_health - amount, 0)
+	hud.set_player_health(_player_health)
+	hud.play_player_hit_feedback()
+	_play_player_damage_shake()
+
+
+func _play_player_damage_shake() -> void:
+	if is_instance_valid(_damage_shake_tween):
+		_damage_shake_tween.kill()
+
+	position = Vector2.ZERO
+	_damage_shake_tween = create_tween()
+	_damage_shake_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_damage_shake_tween.tween_property(self, "position", Vector2(-4.0, 2.0), 0.03)
+	_damage_shake_tween.tween_property(self, "position", Vector2(4.0, -2.0), 0.03)
+	_damage_shake_tween.tween_property(self, "position", Vector2(-2.0, 1.0), 0.03)
+	_damage_shake_tween.tween_property(self, "position", Vector2.ZERO, 0.04)

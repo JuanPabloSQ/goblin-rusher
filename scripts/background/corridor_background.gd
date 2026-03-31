@@ -72,8 +72,8 @@ func _build_stage_rects(gameplay_bottom: float) -> Array[Rect2]:
 		var wall_right_slot: Marker2D = wall_right_slots[stage_index]
 
 		var bottom_y: float = min(center_slot.position.y + lerpf(6.0, 18.0, depth_t), gameplay_bottom - 4.0)
-		var rect_height: float = lerpf(12.0, gameplay_bottom * 0.78, depth_t)
-		var top_y: float = max(bottom_y - rect_height, 10.0)
+		var rect_height: float = lerpf(20.0, gameplay_bottom * 0.86, depth_t)
+		var top_y: float = max(bottom_y - rect_height, 6.0)
 		var left_x: float = wall_left_slot.position.x
 		var right_x: float = wall_right_slot.position.x
 
@@ -231,12 +231,8 @@ func _draw_wall_route_marks(route_root_name: String, is_left_wall: bool) -> void
 
 
 func _draw_tunnel_void(farthest_stage: Rect2) -> void:
-	var inset: float = 2.0
-	var tunnel_rect: Rect2 = Rect2(
-		farthest_stage.position + Vector2.ONE * inset,
-		farthest_stage.size - Vector2.ONE * inset * 2.0
-	)
-	draw_rect(tunnel_rect, VOID_COLOR, true)
+	var radius: float = maxf(minf(farthest_stage.size.x, farthest_stage.size.y) * 0.5 - 2.0, 2.0)
+	draw_circle(farthest_stage.get_center(), radius, VOID_COLOR)
 
 
 func _get_route_slots(route_root_name: String) -> Array[Marker2D]:

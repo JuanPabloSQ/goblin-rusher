@@ -1,16 +1,24 @@
 class_name GameHud
 extends CanvasLayer
 
+@onready var player_health_value_label: Label = $Root/BottomBar/PlayerHealthValueLabel
 @onready var stage_value_label: Label = $Root/BottomBar/StageValueLabel
 @onready var kills_value_label: Label = $Root/BottomBar/KillsValueLabel
 @onready var impact_flash: ColorRect = $Root/ImpactFlash
+@onready var damage_flash: ColorRect = $Root/DamageFlash
 
 var _impact_flash_tween: Tween
+var _damage_flash_tween: Tween
 
 
 func _ready() -> void:
+	set_player_health(10)
 	set_waiting_for_enemy()
 	set_kill_count(0)
+
+
+func set_player_health(player_health: int) -> void:
+	player_health_value_label.text = "%02d" % maxi(player_health, 0)
 
 
 func set_enemy_stage(current_stage: int, total_stages: int) -> void:
@@ -37,3 +45,13 @@ func play_hit_flash() -> void:
 	_impact_flash_tween = create_tween()
 	_impact_flash_tween.tween_property(impact_flash, "modulate", Color(1.0, 1.0, 1.0, 0.18), 0.04)
 	_impact_flash_tween.tween_property(impact_flash, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.12)
+
+
+func play_player_hit_feedback() -> void:
+	if is_instance_valid(_damage_flash_tween):
+		_damage_flash_tween.kill()
+
+	damage_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
+	_damage_flash_tween = create_tween()
+	_damage_flash_tween.tween_property(damage_flash, "modulate", Color(1.0, 1.0, 1.0, 0.28), 0.05)
+	_damage_flash_tween.tween_property(damage_flash, "modulate", Color(1.0, 1.0, 1.0, 0.0), 0.14)
