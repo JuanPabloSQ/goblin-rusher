@@ -100,6 +100,10 @@ func get_total_stages() -> int:
 	return _depth_slots.size()
 
 
+func get_current_slot_index() -> int:
+	return _current_slot_index
+
+
 func get_contact_damage() -> int:
 	return maxi(contact_damage, 1)
 

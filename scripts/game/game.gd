@@ -11,7 +11,9 @@ const PLAYER_STARTING_HEALTH: int = 10
 const ENEMY_ATTACK_INTERVAL: float = 2.0
 
 @export var advance_interval: float = 1.25
-@export var respawn_delay: float = 0.8
+@export var min_spawn_delay: float = 0.35
+@export var max_spawn_delay: float = 2.0
+@export_range(1, 3, 1) var max_spawn_burst: int = 3
 
 @onready var center_slots_root: Node2D = $DepthSlots/CenterSlots
 @onready var wall_left_slots_root: Node2D = $DepthSlots/WallLeftSlots
@@ -27,10 +29,8 @@ const ENEMY_ATTACK_INTERVAL: float = 2.0
 var _center_depth_slots: Array[Marker2D] = []
 var _wall_left_depth_slots: Array[Marker2D] = []
 var _wall_right_depth_slots: Array[Marker2D] = []
-var _current_enemy: Enemy
+var _active_enemies: Array[Enemy] = []
 var _enemies_defeated: int = 0
-var _next_enemy_scene_index: int = 0
-var _next_wall_path_type: int = Enemy.PathType.WALL_LEFT
 var _player_health: int = PLAYER_STARTING_HEALTH
 var _damage_shake_tween: Tween
 var _is_game_over: bool = false
@@ -38,6 +38,7 @@ var _is_paused: bool = false
 
 
 func _ready() -> void:
+	randomize()
 	_center_depth_slots = _collect_depth_slots(center_slots_root)
 	_wall_left_depth_slots = _collect_depth_slots(wall_left_slots_root)
 	_wall_right_depth_slots = _collect_depth_slots(wall_right_slots_root)
@@ -58,10 +59,11 @@ func _ready() -> void:
 	hud.restart_requested.connect(_on_restart_requested)
 	hud.resume_requested.connect(_on_resume_requested)
 	advance_timer.wait_time = advance_interval
-	respawn_timer.wait_time = respawn_delay
 	enemy_attack_timer.wait_time = ENEMY_ATTACK_INTERVAL
 
-	_spawn_enemy()
+	advance_timer.start()
+	enemy_attack_timer.start()
+	_schedule_next_spawn()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -93,23 +95,31 @@ func _collect_depth_slots(slots_root: Node) -> Array[Marker2D]:
 
 func _on_advance_timer_timeout() -> void:
 	if _is_game_over or _is_paused:
-		advance_timer.stop()
 		return
 
-	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive():
-		advance_timer.stop()
-		return
+	_cleanup_inactive_enemies()
 
-	if _current_enemy.is_at_final_slot():
-		advance_timer.stop()
-		return
+	for path_type in [Enemy.PathType.CENTER, Enemy.PathType.WALL_LEFT, Enemy.PathType.WALL_RIGHT]:
+		_advance_path_enemies(path_type)
 
-	_current_enemy.advance_to_next_slot()
 	_update_enemy_stage_ui()
-	_update_enemy_attack_state()
 
-	if _current_enemy.is_at_final_slot():
-		advance_timer.stop()
+
+func _advance_path_enemies(path_type: int) -> void:
+	var path_enemies: Array[Enemy] = _get_active_enemies_for_path(path_type)
+	path_enemies.sort_custom(_sort_enemy_by_depth_descending)
+
+	var occupied_slots: Dictionary = {}
+
+	for enemy in path_enemies:
+		var target_slot_index: int = enemy.get_current_slot_index()
+		var next_slot_index: int = mini(target_slot_index + 1, enemy.get_total_stages() - 1)
+
+		if next_slot_index > target_slot_index and not occupied_slots.has(next_slot_index):
+			enemy.advance_to_next_slot()
+			target_slot_index = next_slot_index
+
+		occupied_slots[target_slot_index] = true
 
 
 func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
@@ -130,63 +140,94 @@ func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
 
 
 func _on_enemy_died(dead_enemy: Enemy) -> void:
-	if _is_game_over or _is_paused:
-		return
-
-	if dead_enemy != _current_enemy:
-		return
-
-	advance_timer.stop()
-	enemy_attack_timer.stop()
-	_current_enemy = null
+	_remove_active_enemy(dead_enemy)
 	_enemies_defeated += 1
 	hud.set_kill_count(_enemies_defeated)
-	hud.set_waiting_for_enemy()
-	respawn_timer.start()
+	_update_enemy_stage_ui()
 
 
 func _on_respawn_timer_timeout() -> void:
 	if _is_game_over or _is_paused:
 		return
 
-	_spawn_enemy()
+	_spawn_enemy_wave()
+	_schedule_next_spawn()
 
 
-func _spawn_enemy() -> void:
-	if _is_game_over or _is_paused or _center_depth_slots.is_empty():
+func _spawn_enemy_wave() -> void:
+	var available_paths: Array[int] = _get_spawnable_paths()
+	if available_paths.is_empty():
 		return
 
-	enemy_attack_timer.stop()
+	available_paths.shuffle()
+	var spawn_count: int = randi_range(1, mini(max_spawn_burst, available_paths.size()))
 
-	var enemy_scene: PackedScene = ENEMY_SCENES[_next_enemy_scene_index]
-	_next_enemy_scene_index = (_next_enemy_scene_index + 1) % ENEMY_SCENES.size()
+	for spawn_index in range(spawn_count):
+		if available_paths.is_empty():
+			break
 
-	var enemy_instance: Enemy = enemy_scene.instantiate() as Enemy
+		var enemy_instance: Enemy = _create_enemy_for_available_paths(available_paths)
+		if enemy_instance == null:
+			break
+
+		var spawn_path_type: int = int(enemy_instance.get_meta("spawn_path_type"))
+		available_paths.erase(spawn_path_type)
+		_finish_spawning_enemy(enemy_instance, spawn_path_type)
+
+	_update_enemy_stage_ui()
+
+
+func _create_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
+	var shuffled_scenes: Array[PackedScene] = ENEMY_SCENES.duplicate()
+	shuffled_scenes.shuffle()
+
+	for enemy_scene in shuffled_scenes:
+		var enemy_instance: Enemy = enemy_scene.instantiate() as Enemy
+		var valid_paths: Array[int] = []
+
+		for path_type in available_paths:
+			if enemy_instance.can_use_path(path_type):
+				valid_paths.append(path_type)
+
+		if valid_paths.is_empty():
+			enemy_instance.queue_free()
+			continue
+
+		valid_paths.shuffle()
+		enemy_instance.set_meta("spawn_path_type", valid_paths[0])
+		return enemy_instance
+
+	return null
+
+
+func _finish_spawning_enemy(enemy_instance: Enemy, path_type: int) -> void:
 	enemy_instance.process_mode = Node.PROCESS_MODE_PAUSABLE
-	var path_type: int = _choose_spawn_path(enemy_instance)
-	var depth_slots: Array[Marker2D] = _get_depth_slots_for_path(path_type)
 
+	var depth_slots: Array[Marker2D] = _get_depth_slots_for_path(path_type)
 	if depth_slots.is_empty():
-		depth_slots = _center_depth_slots
-		path_type = Enemy.PathType.CENTER
+		enemy_instance.queue_free()
+		return
 
 	enemy_layer.add_child(enemy_instance)
 	enemy_instance.clicked.connect(_on_enemy_clicked)
 	enemy_instance.died.connect(_on_enemy_died)
 	enemy_instance.setup_depth_slots(depth_slots, path_type)
-	_current_enemy = enemy_instance
-
-	_update_enemy_stage_ui()
-	_update_enemy_attack_state()
-	advance_timer.start()
+	_active_enemies.append(enemy_instance)
 
 
 func _update_enemy_stage_ui() -> void:
-	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive():
+	_cleanup_inactive_enemies()
+
+	if _active_enemies.is_empty():
 		hud.set_waiting_for_enemy()
 		return
 
-	hud.set_enemy_stage(_current_enemy.get_current_stage(), _current_enemy.get_total_stages())
+	var nearest_enemy: Enemy = _get_nearest_enemy()
+	if nearest_enemy == null:
+		hud.set_waiting_for_enemy()
+		return
+
+	hud.set_enemy_stage(nearest_enemy.get_current_stage(), nearest_enemy.get_total_stages())
 
 
 func _on_projectile_impacted() -> void:
@@ -198,35 +239,22 @@ func _on_projectile_impacted() -> void:
 
 func _on_enemy_attack_timer_timeout() -> void:
 	if _is_game_over or _is_paused:
-		enemy_attack_timer.stop()
 		return
 
-	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive() or not _current_enemy.is_at_final_slot():
-		enemy_attack_timer.stop()
+	_cleanup_inactive_enemies()
+
+	var total_damage: int = 0
+	for enemy in _active_enemies:
+		if enemy.is_at_final_slot():
+			total_damage += enemy.get_contact_damage()
+
+	if total_damage <= 0:
 		return
 
-	_apply_player_damage(_current_enemy.get_contact_damage())
+	_apply_player_damage(total_damage)
 
 	if _player_health <= 0:
 		_enter_game_over()
-
-
-func _choose_spawn_path(enemy_instance: Enemy) -> int:
-	var available_paths: Array[int] = []
-
-	for path_type in [Enemy.PathType.CENTER, Enemy.PathType.WALL_LEFT, Enemy.PathType.WALL_RIGHT]:
-		if enemy_instance.can_use_path(path_type) and not _get_depth_slots_for_path(path_type).is_empty():
-			available_paths.append(path_type)
-
-	if available_paths.is_empty():
-		return Enemy.PathType.CENTER
-
-	if available_paths.has(_next_wall_path_type):
-		var chosen_wall_path: int = _next_wall_path_type
-		_next_wall_path_type = Enemy.PathType.WALL_RIGHT if _next_wall_path_type == Enemy.PathType.WALL_LEFT else Enemy.PathType.WALL_LEFT
-		return chosen_wall_path
-
-	return available_paths[0]
 
 
 func _get_depth_slots_for_path(path_type: int) -> Array[Marker2D]:
@@ -237,15 +265,6 @@ func _get_depth_slots_for_path(path_type: int) -> Array[Marker2D]:
 			return _wall_right_depth_slots
 		_:
 			return _center_depth_slots
-
-
-func _update_enemy_attack_state() -> void:
-	if _is_game_over or _is_paused or not is_instance_valid(_current_enemy) or not _current_enemy.is_alive() or not _current_enemy.is_at_final_slot() or _player_health <= 0:
-		enemy_attack_timer.stop()
-		return
-
-	if enemy_attack_timer.is_stopped():
-		enemy_attack_timer.start()
 
 
 func _apply_player_damage(amount: int) -> void:
@@ -298,8 +317,9 @@ func _stop_gameplay_loop() -> void:
 
 	position = Vector2.ZERO
 
-	if is_instance_valid(_current_enemy):
-		_current_enemy.freeze()
+	for enemy in _active_enemies:
+		if is_instance_valid(enemy):
+			enemy.freeze()
 
 	for projectile in projectile_layer.get_children():
 		projectile.queue_free()
@@ -309,10 +329,8 @@ func _reset_game_state() -> void:
 	get_tree().paused = false
 	_is_game_over = false
 	_is_paused = false
-	_current_enemy = null
+	_active_enemies.clear()
 	_enemies_defeated = 0
-	_next_enemy_scene_index = 0
-	_next_wall_path_type = Enemy.PathType.WALL_LEFT
 	_player_health = PLAYER_STARTING_HEALTH
 	position = Vector2.ZERO
 	hud.reset()
@@ -346,3 +364,74 @@ func _resume_game() -> void:
 	_is_paused = false
 	hud.hide_pause()
 	get_tree().paused = false
+
+
+func _schedule_next_spawn() -> void:
+	if _is_game_over:
+		return
+
+	respawn_timer.stop()
+	respawn_timer.wait_time = randf_range(min(min_spawn_delay, max_spawn_delay), max(min_spawn_delay, max_spawn_delay))
+	respawn_timer.start()
+
+
+func _get_spawnable_paths() -> Array[int]:
+	var spawnable_paths: Array[int] = []
+
+	for path_type in [Enemy.PathType.CENTER, Enemy.PathType.WALL_LEFT, Enemy.PathType.WALL_RIGHT]:
+		if _is_path_spawn_slot_free(path_type):
+			spawnable_paths.append(path_type)
+
+	return spawnable_paths
+
+
+func _is_path_spawn_slot_free(path_type: int) -> bool:
+	for enemy in _active_enemies:
+		if enemy.get_path_type() == path_type and enemy.get_current_slot_index() <= 0:
+			return false
+
+	return true
+
+
+func _get_active_enemies_for_path(path_type: int) -> Array[Enemy]:
+	var path_enemies: Array[Enemy] = []
+
+	for enemy in _active_enemies:
+		if enemy.get_path_type() == path_type:
+			path_enemies.append(enemy)
+
+	return path_enemies
+
+
+func _cleanup_inactive_enemies() -> void:
+	var still_active: Array[Enemy] = []
+
+	for enemy in _active_enemies:
+		if is_instance_valid(enemy) and enemy.is_alive():
+			still_active.append(enemy)
+
+	_active_enemies = still_active
+
+
+func _remove_active_enemy(enemy_to_remove: Enemy) -> void:
+	var remaining_enemies: Array[Enemy] = []
+
+	for enemy in _active_enemies:
+		if enemy != enemy_to_remove and is_instance_valid(enemy) and enemy.is_alive():
+			remaining_enemies.append(enemy)
+
+	_active_enemies = remaining_enemies
+
+
+func _get_nearest_enemy() -> Enemy:
+	var nearest_enemy: Enemy
+
+	for enemy in _active_enemies:
+		if nearest_enemy == null or enemy.get_current_slot_index() > nearest_enemy.get_current_slot_index():
+			nearest_enemy = enemy
+
+	return nearest_enemy
+
+
+func _sort_enemy_by_depth_descending(a: Enemy, b: Enemy) -> bool:
+	return a.get_current_slot_index() > b.get_current_slot_index()
