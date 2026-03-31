@@ -4,6 +4,7 @@ const BONE_PROJECTILE_SCENE: PackedScene = preload("res://scenes/projectiles/bon
 const ENEMY_BASIC_SCENE: PackedScene = preload("res://scenes/enemies/enemy_basic.tscn")
 const ENEMY_SPIDER_SCENE: PackedScene = preload("res://scenes/enemies/enemy_spider.tscn")
 const ENEMY_HOBGOBLIN_SCENE: PackedScene = preload("res://scenes/enemies/enemy_hobgoblin.tscn")
+const ENEMY_ABOMINATION_SCENE: PackedScene = preload("res://scenes/enemies/enemy_abomination.tscn")
 const CLICK_DAMAGE: int = 1
 const PLAYER_STARTING_HEALTH: int = 10
 const ENEMY_ATTACK_INTERVAL: float = 2.0
@@ -11,6 +12,7 @@ const ENEMIES_PER_GAME_STAGE: int = 10
 const EARLY_GAME_MAX_STAGE: int = 10
 const EARLY_GAME_SPAWN_DELAY: float = 5.0
 const HOBGOBLIN_UNLOCK_STAGE: int = 5
+const ABOMINATION_BOSS_STAGE: int = 10
 
 @export var advance_interval: float = 1.25
 @export var min_spawn_delay: float = 0.35
@@ -118,7 +120,7 @@ func _advance_path_enemies(path_type: int) -> void:
 		var target_slot_index: int = enemy.get_current_slot_index()
 		var next_slot_index: int = mini(target_slot_index + 1, enemy.get_total_steps() - 1)
 
-		if next_slot_index > target_slot_index and not occupied_slots.has(next_slot_index):
+		if next_slot_index > target_slot_index and not occupied_slots.has(next_slot_index) and enemy.can_advance_on_current_tick():
 			enemy.advance_to_next_slot()
 			target_slot_index = next_slot_index
 
@@ -147,9 +149,15 @@ func _on_enemy_died(dead_enemy: Enemy) -> void:
 	_enemies_defeated += 1
 	_refresh_stage_state()
 
+	if not _is_game_over and not _is_paused and respawn_timer.is_stopped():
+		_schedule_next_spawn()
+
 
 func _on_respawn_timer_timeout() -> void:
 	if _is_game_over or _is_paused:
+		return
+
+	if _has_active_boss_enemy():
 		return
 
 	_spawn_enemy_wave()
@@ -179,6 +187,9 @@ func _spawn_enemy_wave() -> void:
 
 
 func _create_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
+	if _should_spawn_abomination_boss():
+		return _create_boss_enemy_for_available_paths(available_paths)
+
 	var shuffled_scenes: Array[PackedScene] = _get_enemy_pool_for_current_stage()
 	shuffled_scenes.shuffle()
 
@@ -199,6 +210,23 @@ func _create_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
 		return enemy_instance
 
 	return null
+
+
+func _create_boss_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
+	var boss_enemy: Enemy = ENEMY_ABOMINATION_SCENE.instantiate() as Enemy
+	var valid_paths: Array[int] = []
+
+	for path_type in available_paths:
+		if boss_enemy.can_use_path(path_type):
+			valid_paths.append(path_type)
+
+	if valid_paths.is_empty():
+		boss_enemy.queue_free()
+		return null
+
+	valid_paths.shuffle()
+	boss_enemy.set_meta("spawn_path_type", valid_paths[0])
+	return boss_enemy
 
 
 func _finish_spawning_enemy(enemy_instance: Enemy, path_type: int) -> void:
@@ -364,6 +392,10 @@ func _schedule_next_spawn() -> void:
 	if _is_game_over:
 		return
 
+	if _has_active_boss_enemy():
+		respawn_timer.stop()
+		return
+
 	respawn_timer.stop()
 	respawn_timer.wait_time = _get_spawn_delay_for_current_stage()
 	respawn_timer.start()
@@ -459,3 +491,19 @@ func _get_enemy_pool_for_current_stage() -> Array[PackedScene]:
 		enemy_pool.append(ENEMY_HOBGOBLIN_SCENE)
 
 	return enemy_pool
+
+
+func _should_spawn_abomination_boss() -> bool:
+	return _current_game_stage == ABOMINATION_BOSS_STAGE and _get_next_stage_enemy_number() == ENEMIES_PER_GAME_STAGE
+
+
+func _get_next_stage_enemy_number() -> int:
+	return (_enemies_defeated % ENEMIES_PER_GAME_STAGE) + 1
+
+
+func _has_active_boss_enemy() -> bool:
+	for enemy in _active_enemies:
+		if enemy.is_boss_enemy():
+			return true
+
+	return false

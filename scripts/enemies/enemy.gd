@@ -16,6 +16,8 @@ const PATH_FLAG_WALL_RIGHT: int = 1 << PathType.WALL_RIGHT
 
 @export_range(1, 99, 1) var max_health: int = 3
 @export_range(1, 99, 1) var contact_damage: int = 1
+@export_range(1, 8, 1) var advance_tick_interval: int = 1
+@export var boss_enemy: bool = false
 @export var move_duration: float = 0.4
 @export var body_color: Color = Color(0.84, 0.82, 0.72)
 @export var eye_color: Color = Color(1.0, 0.2, 0.14)
@@ -28,6 +30,7 @@ var _current_slot_index: int = -1
 var _current_health: int = 0
 var _is_dead: bool = false
 var _path_type: int = PathType.CENTER
+var _advance_tick_progress: int = 0
 var _move_tween: Tween
 var _flash_tween: Tween
 
@@ -49,6 +52,7 @@ func setup_depth_slots(depth_slots: Array[Marker2D], path_type: int = PathType.C
 		return
 
 	_current_slot_index = 0
+	_advance_tick_progress = 0
 	_apply_slot(_current_slot_index, true)
 
 
@@ -106,6 +110,23 @@ func get_current_slot_index() -> int:
 
 func get_contact_damage() -> int:
 	return maxi(contact_damage, 1)
+
+
+func is_boss_enemy() -> bool:
+	return boss_enemy
+
+
+func can_advance_on_current_tick() -> bool:
+	var required_tick_interval: int = maxi(advance_tick_interval, 1)
+	if required_tick_interval == 1:
+		return true
+
+	_advance_tick_progress += 1
+	if _advance_tick_progress < required_tick_interval:
+		return false
+
+	_advance_tick_progress = 0
+	return true
 
 
 func take_damage(amount: int) -> void:
