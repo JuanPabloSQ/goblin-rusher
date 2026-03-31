@@ -63,7 +63,8 @@ func _draw() -> void:
 
 
 func _draw_hand(anchor: Marker2D, is_right_hand: bool) -> void:
-	draw_set_transform(anchor.position, anchor.rotation, Vector2.ONE)
+	var hand_scale: Vector2 = Vector2.ONE if is_right_hand else Vector2(-1.0, 1.0)
+	draw_set_transform(anchor.position, anchor.rotation, hand_scale)
 
 	var forearm_points: PackedVector2Array = PackedVector2Array([
 		Vector2(-10.0, 2.0),
@@ -118,12 +119,11 @@ func _draw_hand(anchor: Marker2D, is_right_hand: bool) -> void:
 		draw_line(base_position, tip_position, HAND_COLOR, 6.0)
 		_draw_claw(tip_position, finger_index - 1.5)
 
-	var thumb_direction: float = 1.0 if is_right_hand else -1.0
-	var thumb_base: Vector2 = Vector2(12.0 * thumb_direction, -8.0)
-	var thumb_tip: Vector2 = Vector2(24.0 * thumb_direction, -18.0)
+	var thumb_base: Vector2 = Vector2(-12.0, -8.0)
+	var thumb_tip: Vector2 = Vector2(-24.0, -18.0)
 	draw_line(thumb_base, thumb_tip, OUTLINE_COLOR, 8.0)
 	draw_line(thumb_base, thumb_tip, HAND_COLOR, 6.0)
-	_draw_claw(thumb_tip, 1.0 * thumb_direction)
+	_draw_claw(thumb_tip, -1.0)
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
