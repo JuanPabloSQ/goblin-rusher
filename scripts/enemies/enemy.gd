@@ -114,6 +114,18 @@ func take_damage(amount: int) -> void:
 		_die()
 
 
+func freeze() -> void:
+	input_pickable = false
+	monitoring = false
+	monitorable = false
+
+	if is_instance_valid(_move_tween):
+		_move_tween.kill()
+
+	if is_instance_valid(_flash_tween):
+		_flash_tween.kill()
+
+
 func _apply_slot(slot_index: int, immediate: bool) -> void:
 	var slot: Marker2D = _depth_slots[slot_index]
 	z_index = slot_index + 1

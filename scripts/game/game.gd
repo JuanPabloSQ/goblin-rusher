@@ -33,16 +33,14 @@ var _next_enemy_scene_index: int = 0
 var _next_wall_path_type: int = Enemy.PathType.WALL_LEFT
 var _player_health: int = PLAYER_STARTING_HEALTH
 var _damage_shake_tween: Tween
+var _is_game_over: bool = false
 
 
 func _ready() -> void:
 	_center_depth_slots = _collect_depth_slots(center_slots_root)
 	_wall_left_depth_slots = _collect_depth_slots(wall_left_slots_root)
 	_wall_right_depth_slots = _collect_depth_slots(wall_right_slots_root)
-	_player_health = PLAYER_STARTING_HEALTH
-	hud.set_player_health(_player_health)
-	hud.set_kill_count(_enemies_defeated)
-	hud.set_waiting_for_enemy()
+	_reset_game_state()
 
 	if _center_depth_slots.is_empty():
 		return
@@ -50,6 +48,7 @@ func _ready() -> void:
 	advance_timer.timeout.connect(_on_advance_timer_timeout)
 	respawn_timer.timeout.connect(_on_respawn_timer_timeout)
 	enemy_attack_timer.timeout.connect(_on_enemy_attack_timer_timeout)
+	hud.restart_requested.connect(_on_restart_requested)
 	advance_timer.wait_time = advance_interval
 	respawn_timer.wait_time = respawn_delay
 	enemy_attack_timer.wait_time = ENEMY_ATTACK_INTERVAL
@@ -71,6 +70,10 @@ func _collect_depth_slots(slots_root: Node) -> Array[Marker2D]:
 
 
 func _on_advance_timer_timeout() -> void:
+	if _is_game_over:
+		advance_timer.stop()
+		return
+
 	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive():
 		advance_timer.stop()
 		return
@@ -88,6 +91,9 @@ func _on_advance_timer_timeout() -> void:
 
 
 func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
+	if _is_game_over:
+		return
+
 	if not is_instance_valid(clicked_enemy) or not clicked_enemy.is_alive():
 		return
 
@@ -101,6 +107,9 @@ func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
 
 
 func _on_enemy_died(dead_enemy: Enemy) -> void:
+	if _is_game_over:
+		return
+
 	if dead_enemy != _current_enemy:
 		return
 
@@ -114,11 +123,14 @@ func _on_enemy_died(dead_enemy: Enemy) -> void:
 
 
 func _on_respawn_timer_timeout() -> void:
+	if _is_game_over:
+		return
+
 	_spawn_enemy()
 
 
 func _spawn_enemy() -> void:
-	if _center_depth_slots.is_empty():
+	if _is_game_over or _center_depth_slots.is_empty():
 		return
 
 	enemy_attack_timer.stop()
@@ -154,10 +166,17 @@ func _update_enemy_stage_ui() -> void:
 
 
 func _on_projectile_impacted() -> void:
+	if _is_game_over:
+		return
+
 	hud.play_hit_flash()
 
 
 func _on_enemy_attack_timer_timeout() -> void:
+	if _is_game_over:
+		enemy_attack_timer.stop()
+		return
+
 	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive() or not _current_enemy.is_at_final_slot():
 		enemy_attack_timer.stop()
 		return
@@ -165,7 +184,7 @@ func _on_enemy_attack_timer_timeout() -> void:
 	_apply_player_damage(ENEMY_CONTACT_DAMAGE)
 
 	if _player_health <= 0:
-		enemy_attack_timer.stop()
+		_enter_game_over()
 
 
 func _choose_spawn_path(enemy_instance: Enemy) -> int:
@@ -197,7 +216,7 @@ func _get_depth_slots_for_path(path_type: int) -> Array[Marker2D]:
 
 
 func _update_enemy_attack_state() -> void:
-	if not is_instance_valid(_current_enemy) or not _current_enemy.is_alive() or not _current_enemy.is_at_final_slot() or _player_health <= 0:
+	if _is_game_over or not is_instance_valid(_current_enemy) or not _current_enemy.is_alive() or not _current_enemy.is_at_final_slot() or _player_health <= 0:
 		enemy_attack_timer.stop()
 		return
 
@@ -206,13 +225,16 @@ func _update_enemy_attack_state() -> void:
 
 
 func _apply_player_damage(amount: int) -> void:
-	if amount <= 0 or _player_health <= 0:
+	if _is_game_over or amount <= 0 or _player_health <= 0:
 		return
 
 	_player_health = maxi(_player_health - amount, 0)
 	hud.set_player_health(_player_health)
 	hud.play_player_hit_feedback()
 	_play_player_damage_shake()
+
+	if _player_health == 0:
+		_enter_game_over()
 
 
 func _play_player_damage_shake() -> void:
@@ -226,3 +248,52 @@ func _play_player_damage_shake() -> void:
 	_damage_shake_tween.tween_property(self, "position", Vector2(4.0, -2.0), 0.03)
 	_damage_shake_tween.tween_property(self, "position", Vector2(-2.0, 1.0), 0.03)
 	_damage_shake_tween.tween_property(self, "position", Vector2.ZERO, 0.04)
+
+
+func _enter_game_over() -> void:
+	if _is_game_over:
+		return
+
+	_is_game_over = true
+	_player_health = 0
+	hud.set_player_health(_player_health)
+	_stop_gameplay_loop()
+	hud.show_game_over()
+	get_tree().paused = true
+
+
+func _stop_gameplay_loop() -> void:
+	advance_timer.stop()
+	respawn_timer.stop()
+	enemy_attack_timer.stop()
+
+	if is_instance_valid(_damage_shake_tween):
+		_damage_shake_tween.kill()
+
+	position = Vector2.ZERO
+
+	if is_instance_valid(_current_enemy):
+		_current_enemy.freeze()
+
+	for projectile in projectile_layer.get_children():
+		projectile.queue_free()
+
+
+func _reset_game_state() -> void:
+	get_tree().paused = false
+	_is_game_over = false
+	_current_enemy = null
+	_enemies_defeated = 0
+	_next_enemy_scene_index = 0
+	_next_wall_path_type = Enemy.PathType.WALL_LEFT
+	_player_health = PLAYER_STARTING_HEALTH
+	position = Vector2.ZERO
+	hud.reset()
+	hud.set_player_health(_player_health)
+	hud.set_kill_count(_enemies_defeated)
+	hud.set_waiting_for_enemy()
+
+
+func _on_restart_requested() -> void:
+	get_tree().paused = false
+	get_tree().reload_current_scene()
