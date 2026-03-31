@@ -34,6 +34,7 @@ var _wall_right_depth_slots: Array[Marker2D] = []
 var _active_enemies: Array[Enemy] = []
 var _enemies_defeated: int = 0
 var _current_game_stage: int = 1
+var _debug_forced_stage: int = 0
 var _player_health: int = PLAYER_STARTING_HEALTH
 var _damage_shake_tween: Tween
 var _is_game_over: bool = false
@@ -61,6 +62,7 @@ func _ready() -> void:
 	enemy_attack_timer.timeout.connect(_on_enemy_attack_timer_timeout)
 	hud.restart_requested.connect(_on_restart_requested)
 	hud.resume_requested.connect(_on_resume_requested)
+	hud.debug_stage_requested.connect(_on_debug_stage_requested)
 	advance_timer.wait_time = advance_interval
 	enemy_attack_timer.wait_time = ENEMY_ATTACK_INTERVAL
 
@@ -143,9 +145,7 @@ func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
 func _on_enemy_died(dead_enemy: Enemy) -> void:
 	_remove_active_enemy(dead_enemy)
 	_enemies_defeated += 1
-	_current_game_stage = _calculate_game_stage()
-	hud.set_kill_count(_enemies_defeated)
-	hud.set_game_stage(_current_game_stage)
+	_refresh_stage_state()
 
 
 func _on_respawn_timer_timeout() -> void:
@@ -317,13 +317,13 @@ func _reset_game_state() -> void:
 	_is_paused = false
 	_active_enemies.clear()
 	_enemies_defeated = 0
+	_debug_forced_stage = 0
 	_current_game_stage = 1
 	_player_health = PLAYER_STARTING_HEALTH
 	position = Vector2.ZERO
 	hud.reset()
 	hud.set_player_health(_player_health)
-	hud.set_game_stage(_current_game_stage)
-	hud.set_kill_count(_enemies_defeated)
+	_refresh_stage_state()
 
 
 func _on_restart_requested() -> void:
@@ -333,6 +333,13 @@ func _on_restart_requested() -> void:
 
 func _on_resume_requested() -> void:
 	_resume_game()
+
+
+func _on_debug_stage_requested(requested_stage: int) -> void:
+	_debug_forced_stage = maxi(requested_stage, 1)
+	_refresh_stage_state()
+	_schedule_next_spawn()
+	hud.set_debug_feedback("Etapa forzada: %d" % _current_game_stage, Color(0.62, 0.94, 0.48, 1.0))
 
 
 func _pause_game() -> void:
@@ -415,7 +422,17 @@ func _sort_enemy_by_depth_descending(a: Enemy, b: Enemy) -> bool:
 
 
 func _calculate_game_stage() -> int:
+	if _debug_forced_stage > 0:
+		return _debug_forced_stage
+
 	return int(_enemies_defeated / ENEMIES_PER_GAME_STAGE) + 1
+
+
+func _refresh_stage_state() -> void:
+	_current_game_stage = _calculate_game_stage()
+	hud.set_game_stage(_current_game_stage)
+	hud.set_kill_count(_enemies_defeated)
+	hud.set_debug_stage_value(_current_game_stage)
 
 
 func _get_spawn_delay_for_current_stage() -> float:

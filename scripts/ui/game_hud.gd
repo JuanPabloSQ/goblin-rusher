@@ -3,12 +3,18 @@ extends CanvasLayer
 
 signal restart_requested
 signal resume_requested
+signal debug_stage_requested(stage: int)
 
 @onready var player_health_value_label: Label = $Root/BottomBar/PlayerHealthValueLabel
 @onready var stage_value_label: Label = $Root/BottomBar/StageValueLabel
 @onready var kills_value_label: Label = $Root/BottomBar/KillsValueLabel
 @onready var impact_flash: ColorRect = $Root/ImpactFlash
 @onready var damage_flash: ColorRect = $Root/DamageFlash
+@onready var debug_toggle_button: Button = $Root/BottomBar/DebugToggleButton
+@onready var debug_panel: PanelContainer = $Root/DebugPanel
+@onready var debug_stage_input: LineEdit = $Root/DebugPanel/MarginContainer/VBoxContainer/DebugStageRow/DebugStageInput
+@onready var debug_apply_button: Button = $Root/DebugPanel/MarginContainer/VBoxContainer/DebugStageRow/DebugApplyButton
+@onready var debug_feedback_label: Label = $Root/DebugPanel/MarginContainer/VBoxContainer/DebugFeedbackLabel
 @onready var game_over_overlay: Control = $Root/GameOverOverlay
 @onready var restart_button: Button = $Root/GameOverOverlay/CenterContainer/PanelContainer/MarginContainer/VBoxContainer/RestartButton
 @onready var pause_overlay: Control = $Root/PauseOverlay
@@ -23,6 +29,9 @@ func _ready() -> void:
 	restart_button.pressed.connect(_on_restart_button_pressed)
 	continue_button.pressed.connect(_on_continue_button_pressed)
 	pause_restart_button.pressed.connect(_on_restart_button_pressed)
+	debug_toggle_button.pressed.connect(_on_debug_toggle_pressed)
+	debug_apply_button.pressed.connect(_on_debug_apply_pressed)
+	debug_stage_input.text_submitted.connect(_on_debug_stage_text_submitted)
 	reset()
 
 
@@ -48,6 +57,9 @@ func reset() -> void:
 	set_player_health(10)
 	set_game_stage(1)
 	set_kill_count(0)
+	set_debug_stage_value(1)
+	set_debug_feedback("Debug listo", Color(0.8, 0.78, 0.66, 0.9))
+	hide_debug_panel()
 	hide_game_over()
 	hide_pause()
 	impact_flash.modulate = Color(1.0, 1.0, 1.0, 0.0)
@@ -70,6 +82,32 @@ func show_pause() -> void:
 
 func hide_pause() -> void:
 	pause_overlay.visible = false
+
+
+func set_debug_stage_value(game_stage: int) -> void:
+	debug_stage_input.text = str(maxi(game_stage, 1))
+
+
+func set_debug_feedback(message: String, color: Color = Color(0.8, 0.78, 0.66, 0.9)) -> void:
+	debug_feedback_label.text = message
+	debug_feedback_label.modulate = color
+
+
+func show_debug_panel() -> void:
+	debug_panel.visible = true
+	debug_stage_input.grab_focus()
+	debug_stage_input.caret_column = debug_stage_input.text.length()
+
+
+func hide_debug_panel() -> void:
+	debug_panel.visible = false
+
+
+func toggle_debug_panel() -> void:
+	debug_panel.visible = not debug_panel.visible
+	if debug_panel.visible:
+		debug_stage_input.grab_focus()
+		debug_stage_input.caret_column = debug_stage_input.text.length()
 
 
 func play_hit_flash() -> void:
@@ -98,3 +136,31 @@ func _on_restart_button_pressed() -> void:
 
 func _on_continue_button_pressed() -> void:
 	resume_requested.emit()
+
+
+func _on_debug_toggle_pressed() -> void:
+	toggle_debug_panel()
+
+
+func _on_debug_apply_pressed() -> void:
+	_submit_debug_stage()
+
+
+func _on_debug_stage_text_submitted(_new_text: String) -> void:
+	_submit_debug_stage()
+
+
+func _submit_debug_stage() -> void:
+	var trimmed_value: String = debug_stage_input.text.strip_edges()
+	if trimmed_value.is_empty():
+		set_debug_feedback("Ingresa una etapa valida", Color(1.0, 0.56, 0.4, 1.0))
+		return
+
+	if not trimmed_value.is_valid_int():
+		set_debug_feedback("Solo numeros enteros", Color(1.0, 0.56, 0.4, 1.0))
+		return
+
+	var requested_stage: int = maxi(trimmed_value.to_int(), 1)
+	set_debug_stage_value(requested_stage)
+	debug_stage_requested.emit(requested_stage)
+	hide_debug_panel()
