@@ -34,42 +34,42 @@ func _draw() -> void:
 		return
 
 	var gameplay_bottom: float = viewport_size.y - HUD_HEIGHT
-	var stage_rects: Array[Rect2] = _build_stage_rects(gameplay_bottom)
+	var depth_rects: Array[Rect2] = _build_depth_rects(gameplay_bottom)
 
 	draw_rect(Rect2(Vector2.ZERO, viewport_size), BACKGROUND_COLOR, true)
 
-	if stage_rects.is_empty():
+	if depth_rects.is_empty():
 		return
 
-	var outer_rect: Rect2 = stage_rects[stage_rects.size() - 1]
+	var outer_rect: Rect2 = depth_rects[depth_rects.size() - 1]
 	_draw_front_shell(viewport_size, gameplay_bottom, outer_rect)
 
-	for stage_index in range(stage_rects.size() - 1, 0, -1):
-		var outer_stage: Rect2 = stage_rects[stage_index]
-		var inner_stage: Rect2 = stage_rects[stage_index - 1]
-		var depth_t: float = _get_stage_ratio(stage_index, stage_rects.size())
-		_draw_stage_segment(outer_stage, inner_stage, depth_t)
+	for depth_index in range(depth_rects.size() - 1, 0, -1):
+		var outer_depth_rect: Rect2 = depth_rects[depth_index]
+		var inner_depth_rect: Rect2 = depth_rects[depth_index - 1]
+		var depth_t: float = _get_depth_ratio(depth_index, depth_rects.size())
+		_draw_depth_segment(outer_depth_rect, inner_depth_rect, depth_t)
 
-	_draw_floor_path_segments(stage_rects)
-	_draw_stage_frames(stage_rects)
+	_draw_floor_path_segments(depth_rects)
+	_draw_depth_frames(depth_rects)
 	_draw_wall_route_marks("WallLeftSlots", true)
 	_draw_wall_route_marks("WallRightSlots", false)
-	_draw_tunnel_void(stage_rects[0])
+	_draw_tunnel_void(depth_rects[0])
 	_draw_vignette(viewport_size, gameplay_bottom)
 
 
-func _build_stage_rects(gameplay_bottom: float) -> Array[Rect2]:
-	var stage_rects: Array[Rect2] = []
+func _build_depth_rects(gameplay_bottom: float) -> Array[Rect2]:
+	var depth_rects: Array[Rect2] = []
 	var center_slots: Array[Marker2D] = _get_route_slots("CenterSlots")
 	var wall_left_slots: Array[Marker2D] = _get_route_slots("WallLeftSlots")
 	var wall_right_slots: Array[Marker2D] = _get_route_slots("WallRightSlots")
-	var stage_count: int = mini(center_slots.size(), mini(wall_left_slots.size(), wall_right_slots.size()))
+	var depth_count: int = mini(center_slots.size(), mini(wall_left_slots.size(), wall_right_slots.size()))
 
-	for stage_index in range(stage_count):
-		var depth_t: float = _get_stage_ratio(stage_index, stage_count)
-		var center_slot: Marker2D = center_slots[stage_index]
-		var wall_left_slot: Marker2D = wall_left_slots[stage_index]
-		var wall_right_slot: Marker2D = wall_right_slots[stage_index]
+	for depth_index in range(depth_count):
+		var depth_t: float = _get_depth_ratio(depth_index, depth_count)
+		var center_slot: Marker2D = center_slots[depth_index]
+		var wall_left_slot: Marker2D = wall_left_slots[depth_index]
+		var wall_right_slot: Marker2D = wall_right_slots[depth_index]
 
 		var bottom_y: float = min(center_slot.position.y + lerpf(6.0, 18.0, depth_t), gameplay_bottom - 4.0)
 		var rect_height: float = lerpf(20.0, gameplay_bottom * 0.86, depth_t)
@@ -80,14 +80,14 @@ func _build_stage_rects(gameplay_bottom: float) -> Array[Rect2]:
 		if right_x - left_x < 24.0:
 			continue
 
-		stage_rects.append(
+		depth_rects.append(
 			Rect2(
 				Vector2(left_x, top_y),
 				Vector2(right_x - left_x, bottom_y - top_y)
 			)
 		)
 
-	return stage_rects
+	return depth_rects
 
 
 func _draw_front_shell(viewport_size: Vector2, gameplay_bottom: float, outer_rect: Rect2) -> void:
@@ -134,87 +134,87 @@ func _draw_front_shell(viewport_size: Vector2, gameplay_bottom: float, outer_rec
 	)
 
 
-func _draw_stage_segment(outer_stage: Rect2, inner_stage: Rect2, depth_t: float) -> void:
+func _draw_depth_segment(outer_depth_rect: Rect2, inner_depth_rect: Rect2, depth_t: float) -> void:
 	var ceiling_color: Color = CEILING_FAR_COLOR.lerp(CEILING_NEAR_COLOR, depth_t)
 	var wall_color: Color = WALL_FAR_COLOR.lerp(WALL_NEAR_COLOR, depth_t)
 	var floor_color: Color = FLOOR_FAR_COLOR.lerp(FLOOR_NEAR_COLOR, depth_t)
 
 	draw_colored_polygon(
 		PackedVector2Array([
-			outer_stage.position,
-			Vector2(outer_stage.end.x, outer_stage.position.y),
-			Vector2(inner_stage.end.x, inner_stage.position.y),
-			inner_stage.position,
+			outer_depth_rect.position,
+			Vector2(outer_depth_rect.end.x, outer_depth_rect.position.y),
+			Vector2(inner_depth_rect.end.x, inner_depth_rect.position.y),
+			inner_depth_rect.position,
 		]),
 		ceiling_color
 	)
 	draw_colored_polygon(
 		PackedVector2Array([
-			Vector2(outer_stage.position.x, outer_stage.position.y),
-			Vector2(inner_stage.position.x, inner_stage.position.y),
-			Vector2(inner_stage.position.x, inner_stage.end.y),
-			Vector2(outer_stage.position.x, outer_stage.end.y),
+			Vector2(outer_depth_rect.position.x, outer_depth_rect.position.y),
+			Vector2(inner_depth_rect.position.x, inner_depth_rect.position.y),
+			Vector2(inner_depth_rect.position.x, inner_depth_rect.end.y),
+			Vector2(outer_depth_rect.position.x, outer_depth_rect.end.y),
 		]),
 		wall_color
 	)
 	draw_colored_polygon(
 		PackedVector2Array([
-			Vector2(outer_stage.end.x, outer_stage.position.y),
-			Vector2(inner_stage.end.x, inner_stage.position.y),
-			Vector2(inner_stage.end.x, inner_stage.end.y),
-			Vector2(outer_stage.end.x, outer_stage.end.y),
+			Vector2(outer_depth_rect.end.x, outer_depth_rect.position.y),
+			Vector2(inner_depth_rect.end.x, inner_depth_rect.position.y),
+			Vector2(inner_depth_rect.end.x, inner_depth_rect.end.y),
+			Vector2(outer_depth_rect.end.x, outer_depth_rect.end.y),
 		]),
 		wall_color
 	)
 	draw_colored_polygon(
 		PackedVector2Array([
-			Vector2(outer_stage.position.x, outer_stage.end.y),
-			Vector2(outer_stage.end.x, outer_stage.end.y),
-			inner_stage.end,
-			Vector2(inner_stage.position.x, inner_stage.end.y),
+			Vector2(outer_depth_rect.position.x, outer_depth_rect.end.y),
+			Vector2(outer_depth_rect.end.x, outer_depth_rect.end.y),
+			inner_depth_rect.end,
+			Vector2(inner_depth_rect.position.x, inner_depth_rect.end.y),
 		]),
 		floor_color
 	)
 
 
-func _draw_floor_path_segments(stage_rects: Array[Rect2]) -> void:
-	for stage_index in range(stage_rects.size() - 1, 0, -1):
-		var outer_stage: Rect2 = stage_rects[stage_index]
-		var inner_stage: Rect2 = stage_rects[stage_index - 1]
-		var depth_t: float = _get_stage_ratio(stage_index, stage_rects.size())
-		var outer_half_width: float = outer_stage.size.x * 0.13
-		var inner_half_width: float = inner_stage.size.x * 0.13
+func _draw_floor_path_segments(depth_rects: Array[Rect2]) -> void:
+	for depth_index in range(depth_rects.size() - 1, 0, -1):
+		var outer_depth_rect: Rect2 = depth_rects[depth_index]
+		var inner_depth_rect: Rect2 = depth_rects[depth_index - 1]
+		var depth_t: float = _get_depth_ratio(depth_index, depth_rects.size())
+		var outer_half_width: float = outer_depth_rect.size.x * 0.13
+		var inner_half_width: float = inner_depth_rect.size.x * 0.13
 		var path_color: Color = FLOOR_PATH_FAR_COLOR.lerp(FLOOR_PATH_NEAR_COLOR, depth_t)
 
 		draw_colored_polygon(
 			PackedVector2Array([
-				Vector2(outer_stage.get_center().x - outer_half_width, outer_stage.end.y),
-				Vector2(outer_stage.get_center().x + outer_half_width, outer_stage.end.y),
-				Vector2(inner_stage.get_center().x + inner_half_width, inner_stage.end.y),
-				Vector2(inner_stage.get_center().x - inner_half_width, inner_stage.end.y),
+				Vector2(outer_depth_rect.get_center().x - outer_half_width, outer_depth_rect.end.y),
+				Vector2(outer_depth_rect.get_center().x + outer_half_width, outer_depth_rect.end.y),
+				Vector2(inner_depth_rect.get_center().x + inner_half_width, inner_depth_rect.end.y),
+				Vector2(inner_depth_rect.get_center().x - inner_half_width, inner_depth_rect.end.y),
 			]),
 			path_color
 		)
 
 
-func _draw_stage_frames(stage_rects: Array[Rect2]) -> void:
-	for stage_index in range(stage_rects.size()):
-		var stage_rect: Rect2 = stage_rects[stage_index]
-		var depth_t: float = _get_stage_ratio(stage_index, stage_rects.size())
+func _draw_depth_frames(depth_rects: Array[Rect2]) -> void:
+	for depth_index in range(depth_rects.size()):
+		var depth_rect: Rect2 = depth_rects[depth_index]
+		var depth_t: float = _get_depth_ratio(depth_index, depth_rects.size())
 		var frame_color: Color = FRAME_FAR_COLOR.lerp(FRAME_NEAR_COLOR, depth_t)
 		var floor_color: Color = FLOOR_PATH_FAR_COLOR.lerp(FLOOR_PATH_NEAR_COLOR, depth_t)
-		var line_width: float = 1.0 if stage_index <= 1 else 2.0
+		var line_width: float = 1.0 if depth_index <= 1 else 2.0
 
-		draw_line(stage_rect.position, Vector2(stage_rect.end.x, stage_rect.position.y), CEILING_EDGE_COLOR, line_width)
-		draw_line(stage_rect.position, Vector2(stage_rect.position.x, stage_rect.end.y), frame_color, line_width)
-		draw_line(Vector2(stage_rect.end.x, stage_rect.position.y), stage_rect.end, frame_color, line_width)
-		draw_line(Vector2(stage_rect.position.x, stage_rect.end.y), stage_rect.end, floor_color, line_width + 1.0)
+		draw_line(depth_rect.position, Vector2(depth_rect.end.x, depth_rect.position.y), CEILING_EDGE_COLOR, line_width)
+		draw_line(depth_rect.position, Vector2(depth_rect.position.x, depth_rect.end.y), frame_color, line_width)
+		draw_line(Vector2(depth_rect.end.x, depth_rect.position.y), depth_rect.end, frame_color, line_width)
+		draw_line(Vector2(depth_rect.position.x, depth_rect.end.y), depth_rect.end, floor_color, line_width + 1.0)
 
-		var floor_center_x: float = stage_rect.get_center().x
-		var floor_half_width: float = stage_rect.size.x * 0.16
+		var floor_center_x: float = depth_rect.get_center().x
+		var floor_half_width: float = depth_rect.size.x * 0.16
 		draw_line(
-			Vector2(floor_center_x - floor_half_width, stage_rect.end.y),
-			Vector2(floor_center_x + floor_half_width, stage_rect.end.y),
+			Vector2(floor_center_x - floor_half_width, depth_rect.end.y),
+			Vector2(floor_center_x + floor_half_width, depth_rect.end.y),
 			Color(0.96, 0.74, 0.38, 0.95),
 			line_width + 1.0
 		)
@@ -230,9 +230,9 @@ func _draw_wall_route_marks(route_root_name: String, is_left_wall: bool) -> void
 		draw_circle(slot.position + Vector2(3.0 * horizontal_sign, 0.0), 1.8, WALL_ROUTE_DOT_COLOR)
 
 
-func _draw_tunnel_void(farthest_stage: Rect2) -> void:
-	var radius: float = maxf(minf(farthest_stage.size.x, farthest_stage.size.y) * 0.5 - 2.0, 2.0)
-	draw_circle(farthest_stage.get_center(), radius, VOID_COLOR)
+func _draw_tunnel_void(farthest_depth_rect: Rect2) -> void:
+	var radius: float = maxf(minf(farthest_depth_rect.size.x, farthest_depth_rect.size.y) * 0.5 - 2.0, 2.0)
+	draw_circle(farthest_depth_rect.get_center(), radius, VOID_COLOR)
 
 
 func _get_route_slots(route_root_name: String) -> Array[Marker2D]:
@@ -253,11 +253,11 @@ func _get_route_slots(route_root_name: String) -> Array[Marker2D]:
 	return route_slots
 
 
-func _get_stage_ratio(stage_index: int, stage_count: int) -> float:
-	if stage_count <= 1:
+func _get_depth_ratio(depth_index: int, depth_count: int) -> float:
+	if depth_count <= 1:
 		return 1.0
 
-	return float(stage_index) / float(stage_count - 1)
+	return float(depth_index) / float(depth_count - 1)
 
 
 func _draw_vignette(viewport_size: Vector2, gameplay_bottom: float) -> void:

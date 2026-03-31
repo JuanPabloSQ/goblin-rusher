@@ -89,14 +89,14 @@ func get_projectile_target_position() -> Vector2:
 	return global_position + Vector2(0.0, -18.0 * scale.y)
 
 
-func get_current_stage() -> int:
+func get_current_step() -> int:
 	if _depth_slots.is_empty():
 		return 0
 
 	return _current_slot_index + 1
 
 
-func get_total_stages() -> int:
+func get_total_steps() -> int:
 	return _depth_slots.size()
 
 

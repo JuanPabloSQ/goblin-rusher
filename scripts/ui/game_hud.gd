@@ -30,16 +30,8 @@ func set_player_health(player_health: int) -> void:
 	player_health_value_label.text = "%02d" % maxi(player_health, 0)
 
 
-func set_enemy_stage(current_stage: int, total_stages: int) -> void:
-	if current_stage <= 0 or total_stages <= 0:
-		set_waiting_for_enemy()
-		return
-
-	stage_value_label.text = "%02d / %02d" % [current_stage, total_stages]
-
-
-func set_waiting_for_enemy() -> void:
-	stage_value_label.text = "-- / --"
+func set_game_stage(game_stage: int) -> void:
+	stage_value_label.text = "%02d" % maxi(game_stage, 1)
 
 
 func set_kill_count(kill_count: int) -> void:
@@ -54,7 +46,7 @@ func reset() -> void:
 		_damage_flash_tween.kill()
 
 	set_player_health(10)
-	set_waiting_for_enemy()
+	set_game_stage(1)
 	set_kill_count(0)
 	hide_game_over()
 	hide_pause()

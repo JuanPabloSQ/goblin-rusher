@@ -1,14 +1,16 @@
 extends Node2D
 
 const BONE_PROJECTILE_SCENE: PackedScene = preload("res://scenes/projectiles/bone_projectile.tscn")
-const ENEMY_SCENES: Array[PackedScene] = [
-	preload("res://scenes/enemies/enemy_basic.tscn"),
-	preload("res://scenes/enemies/enemy_spider.tscn"),
-	preload("res://scenes/enemies/enemy_hobgoblin.tscn"),
-]
+const ENEMY_BASIC_SCENE: PackedScene = preload("res://scenes/enemies/enemy_basic.tscn")
+const ENEMY_SPIDER_SCENE: PackedScene = preload("res://scenes/enemies/enemy_spider.tscn")
+const ENEMY_HOBGOBLIN_SCENE: PackedScene = preload("res://scenes/enemies/enemy_hobgoblin.tscn")
 const CLICK_DAMAGE: int = 1
 const PLAYER_STARTING_HEALTH: int = 10
 const ENEMY_ATTACK_INTERVAL: float = 2.0
+const ENEMIES_PER_GAME_STAGE: int = 10
+const EARLY_GAME_MAX_STAGE: int = 10
+const EARLY_GAME_SPAWN_DELAY: float = 5.0
+const HOBGOBLIN_UNLOCK_STAGE: int = 5
 
 @export var advance_interval: float = 1.25
 @export var min_spawn_delay: float = 0.35
@@ -31,6 +33,7 @@ var _wall_left_depth_slots: Array[Marker2D] = []
 var _wall_right_depth_slots: Array[Marker2D] = []
 var _active_enemies: Array[Enemy] = []
 var _enemies_defeated: int = 0
+var _current_game_stage: int = 1
 var _player_health: int = PLAYER_STARTING_HEALTH
 var _damage_shake_tween: Tween
 var _is_game_over: bool = false
@@ -102,8 +105,6 @@ func _on_advance_timer_timeout() -> void:
 	for path_type in [Enemy.PathType.CENTER, Enemy.PathType.WALL_LEFT, Enemy.PathType.WALL_RIGHT]:
 		_advance_path_enemies(path_type)
 
-	_update_enemy_stage_ui()
-
 
 func _advance_path_enemies(path_type: int) -> void:
 	var path_enemies: Array[Enemy] = _get_active_enemies_for_path(path_type)
@@ -113,7 +114,7 @@ func _advance_path_enemies(path_type: int) -> void:
 
 	for enemy in path_enemies:
 		var target_slot_index: int = enemy.get_current_slot_index()
-		var next_slot_index: int = mini(target_slot_index + 1, enemy.get_total_stages() - 1)
+		var next_slot_index: int = mini(target_slot_index + 1, enemy.get_total_steps() - 1)
 
 		if next_slot_index > target_slot_index and not occupied_slots.has(next_slot_index):
 			enemy.advance_to_next_slot()
@@ -142,8 +143,9 @@ func _on_enemy_clicked(clicked_enemy: Enemy) -> void:
 func _on_enemy_died(dead_enemy: Enemy) -> void:
 	_remove_active_enemy(dead_enemy)
 	_enemies_defeated += 1
+	_current_game_stage = _calculate_game_stage()
 	hud.set_kill_count(_enemies_defeated)
-	_update_enemy_stage_ui()
+	hud.set_game_stage(_current_game_stage)
 
 
 func _on_respawn_timer_timeout() -> void:
@@ -160,7 +162,7 @@ func _spawn_enemy_wave() -> void:
 		return
 
 	available_paths.shuffle()
-	var spawn_count: int = randi_range(1, mini(max_spawn_burst, available_paths.size()))
+	var spawn_count: int = _get_spawn_count_for_current_stage(available_paths.size())
 
 	for spawn_index in range(spawn_count):
 		if available_paths.is_empty():
@@ -174,11 +176,10 @@ func _spawn_enemy_wave() -> void:
 		available_paths.erase(spawn_path_type)
 		_finish_spawning_enemy(enemy_instance, spawn_path_type)
 
-	_update_enemy_stage_ui()
 
 
 func _create_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
-	var shuffled_scenes: Array[PackedScene] = ENEMY_SCENES.duplicate()
+	var shuffled_scenes: Array[PackedScene] = _get_enemy_pool_for_current_stage()
 	shuffled_scenes.shuffle()
 
 	for enemy_scene in shuffled_scenes:
@@ -213,21 +214,6 @@ func _finish_spawning_enemy(enemy_instance: Enemy, path_type: int) -> void:
 	enemy_instance.died.connect(_on_enemy_died)
 	enemy_instance.setup_depth_slots(depth_slots, path_type)
 	_active_enemies.append(enemy_instance)
-
-
-func _update_enemy_stage_ui() -> void:
-	_cleanup_inactive_enemies()
-
-	if _active_enemies.is_empty():
-		hud.set_waiting_for_enemy()
-		return
-
-	var nearest_enemy: Enemy = _get_nearest_enemy()
-	if nearest_enemy == null:
-		hud.set_waiting_for_enemy()
-		return
-
-	hud.set_enemy_stage(nearest_enemy.get_current_stage(), nearest_enemy.get_total_stages())
 
 
 func _on_projectile_impacted() -> void:
@@ -331,12 +317,13 @@ func _reset_game_state() -> void:
 	_is_paused = false
 	_active_enemies.clear()
 	_enemies_defeated = 0
+	_current_game_stage = 1
 	_player_health = PLAYER_STARTING_HEALTH
 	position = Vector2.ZERO
 	hud.reset()
 	hud.set_player_health(_player_health)
+	hud.set_game_stage(_current_game_stage)
 	hud.set_kill_count(_enemies_defeated)
-	hud.set_waiting_for_enemy()
 
 
 func _on_restart_requested() -> void:
@@ -371,7 +358,7 @@ func _schedule_next_spawn() -> void:
 		return
 
 	respawn_timer.stop()
-	respawn_timer.wait_time = randf_range(min(min_spawn_delay, max_spawn_delay), max(min_spawn_delay, max_spawn_delay))
+	respawn_timer.wait_time = _get_spawn_delay_for_current_stage()
 	respawn_timer.start()
 
 
@@ -423,15 +410,35 @@ func _remove_active_enemy(enemy_to_remove: Enemy) -> void:
 	_active_enemies = remaining_enemies
 
 
-func _get_nearest_enemy() -> Enemy:
-	var nearest_enemy: Enemy
-
-	for enemy in _active_enemies:
-		if nearest_enemy == null or enemy.get_current_slot_index() > nearest_enemy.get_current_slot_index():
-			nearest_enemy = enemy
-
-	return nearest_enemy
-
-
 func _sort_enemy_by_depth_descending(a: Enemy, b: Enemy) -> bool:
 	return a.get_current_slot_index() > b.get_current_slot_index()
+
+
+func _calculate_game_stage() -> int:
+	return int(_enemies_defeated / ENEMIES_PER_GAME_STAGE) + 1
+
+
+func _get_spawn_delay_for_current_stage() -> float:
+	if _current_game_stage <= EARLY_GAME_MAX_STAGE:
+		return EARLY_GAME_SPAWN_DELAY
+
+	return randf_range(min(min_spawn_delay, max_spawn_delay), max(min_spawn_delay, max_spawn_delay))
+
+
+func _get_spawn_count_for_current_stage(available_path_count: int) -> int:
+	if _current_game_stage <= EARLY_GAME_MAX_STAGE:
+		return 1
+
+	return randi_range(1, mini(max_spawn_burst, available_path_count))
+
+
+func _get_enemy_pool_for_current_stage() -> Array[PackedScene]:
+	var enemy_pool: Array[PackedScene] = [
+		ENEMY_BASIC_SCENE,
+		ENEMY_SPIDER_SCENE,
+	]
+
+	if _current_game_stage >= HOBGOBLIN_UNLOCK_STAGE:
+		enemy_pool.append(ENEMY_HOBGOBLIN_SCENE)
+
+	return enemy_pool
