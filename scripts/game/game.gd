@@ -2,6 +2,7 @@ extends Node2D
 
 const BONE_PROJECTILE_SCENE: PackedScene = preload("res://scenes/projectiles/bone_projectile.tscn")
 const ENEMY_BASIC_SCENE: PackedScene = preload("res://scenes/enemies/enemy_basic.tscn")
+const ENEMY_SHIELD_SKELETON_SCENE: PackedScene = preload("res://scenes/enemies/enemy_shield_skeleton.tscn")
 const ENEMY_SPIDER_SCENE: PackedScene = preload("res://scenes/enemies/enemy_spider.tscn")
 const ENEMY_HOBGOBLIN_SCENE: PackedScene = preload("res://scenes/enemies/enemy_hobgoblin.tscn")
 const ENEMY_ABOMINATION_SCENE: PackedScene = preload("res://scenes/enemies/enemy_abomination.tscn")
@@ -9,8 +10,12 @@ const CLICK_DAMAGE: int = 1
 const PLAYER_STARTING_HEALTH: int = 10
 const ENEMY_ATTACK_INTERVAL: float = 2.0
 const ENEMIES_PER_GAME_STAGE: int = 10
-const EARLY_GAME_MAX_STAGE: int = 10
-const EARLY_GAME_SPAWN_DELAY: float = 5.0
+const SPAWN_STAGE_BLOCK_SIZE: int = 10
+const BASE_SPAWN_DELAY: float = 5.0
+const SPAWN_DELAY_REDUCTION_PER_BLOCK: float = 0.3
+const MINIMUM_SPAWN_DELAY: float = 2.0
+const SHIELD_SKELETON_START_STAGE: int = 11
+const SHIELD_SKELETON_END_STAGE: int = 20
 const HOBGOBLIN_UNLOCK_STAGE: int = 5
 const ABOMINATION_BOSS_STAGE: int = 10
 const BOSS_TRANSITION_DELAY: float = 2.0
@@ -18,8 +23,6 @@ const HOVER_AUTO_FIRE_UPGRADE: StringName = &"hover_auto_fire"
 const HOVER_AUTO_FIRE_INTERVAL: float = 0.32
 
 @export var advance_interval: float = 1.25
-@export var min_spawn_delay: float = 0.35
-@export var max_spawn_delay: float = 2.0
 @export_range(1, 3, 1) var max_spawn_burst: int = 3
 
 @onready var center_slots_root: Node2D = $DepthSlots/CenterSlots
@@ -514,22 +517,25 @@ func _refresh_stage_state() -> void:
 
 
 func _get_spawn_delay_for_current_stage() -> float:
-	if _current_game_stage <= EARLY_GAME_MAX_STAGE:
-		return EARLY_GAME_SPAWN_DELAY
-
-	return randf_range(min(min_spawn_delay, max_spawn_delay), max(min_spawn_delay, max_spawn_delay))
+	var completed_spawn_blocks: int = int((_current_game_stage - 1) / SPAWN_STAGE_BLOCK_SIZE)
+	var reduced_delay: float = BASE_SPAWN_DELAY - (float(completed_spawn_blocks) * SPAWN_DELAY_REDUCTION_PER_BLOCK)
+	return maxf(reduced_delay, MINIMUM_SPAWN_DELAY)
 
 
 func _get_spawn_count_for_current_stage(available_path_count: int) -> int:
-	if _current_game_stage <= EARLY_GAME_MAX_STAGE:
+	if _current_game_stage <= SPAWN_STAGE_BLOCK_SIZE:
 		return 1
 
 	return randi_range(1, mini(max_spawn_burst, available_path_count))
 
 
 func _get_enemy_pool_for_current_stage() -> Array[PackedScene]:
+	var skeleton_scene: PackedScene = ENEMY_BASIC_SCENE
+	if _is_shield_skeleton_stage_range():
+		skeleton_scene = ENEMY_SHIELD_SKELETON_SCENE
+
 	var enemy_pool: Array[PackedScene] = [
-		ENEMY_BASIC_SCENE,
+		skeleton_scene,
 		ENEMY_SPIDER_SCENE,
 	]
 
@@ -537,6 +543,10 @@ func _get_enemy_pool_for_current_stage() -> Array[PackedScene]:
 		enemy_pool.append(ENEMY_HOBGOBLIN_SCENE)
 
 	return enemy_pool
+
+
+func _is_shield_skeleton_stage_range() -> bool:
+	return _current_game_stage >= SHIELD_SKELETON_START_STAGE and _current_game_stage <= SHIELD_SKELETON_END_STAGE
 
 
 func _start_boss_transition() -> void:
