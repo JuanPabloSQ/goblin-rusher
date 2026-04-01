@@ -3,6 +3,7 @@ extends Node2D
 const BONE_PROJECTILE_SCENE: PackedScene = preload("res://scenes/projectiles/bone_projectile.tscn")
 const ENEMY_BASIC_SCENE: PackedScene = preload("res://scenes/enemies/enemy_basic.tscn")
 const ENEMY_SHIELD_SKELETON_SCENE: PackedScene = preload("res://scenes/enemies/enemy_shield_skeleton.tscn")
+const ENEMY_GHOST_SCENE: PackedScene = preload("res://scenes/enemies/enemy_ghost.tscn")
 const ENEMY_SPIDER_SCENE: PackedScene = preload("res://scenes/enemies/enemy_spider.tscn")
 const ENEMY_HOBGOBLIN_SCENE: PackedScene = preload("res://scenes/enemies/enemy_hobgoblin.tscn")
 const ENEMY_ABOMINATION_SCENE: PackedScene = preload("res://scenes/enemies/enemy_abomination.tscn")
@@ -42,7 +43,6 @@ var _wall_right_depth_slots: Array[Marker2D] = []
 var _active_enemies: Array[Enemy] = []
 var _enemies_defeated: int = 0
 var _current_game_stage: int = 1
-var _debug_forced_stage: int = 0
 var _player_health: int = PLAYER_STARTING_HEALTH
 var _damage_shake_tween: Tween
 var _is_game_over: bool = false
@@ -380,7 +380,6 @@ func _reset_game_state() -> void:
 	_is_boss_transitioning = false
 	_active_enemies.clear()
 	_enemies_defeated = 0
-	_debug_forced_stage = 0
 	_current_game_stage = 1
 	_player_health = PLAYER_STARTING_HEALTH
 	_has_hover_auto_fire_upgrade = false
@@ -402,7 +401,8 @@ func _on_resume_requested() -> void:
 
 
 func _on_debug_stage_requested(requested_stage: int) -> void:
-	_debug_forced_stage = maxi(requested_stage, 1)
+	var clamped_stage: int = maxi(requested_stage, 1)
+	_enemies_defeated = (clamped_stage - 1) * ENEMIES_PER_GAME_STAGE
 	_refresh_stage_state()
 	_schedule_next_spawn()
 	hud.set_debug_feedback("Etapa forzada: %d" % _current_game_stage, Color(0.62, 0.94, 0.48, 1.0))
@@ -503,9 +503,6 @@ func _sort_enemy_by_depth_descending(a: Enemy, b: Enemy) -> bool:
 
 
 func _calculate_game_stage() -> int:
-	if _debug_forced_stage > 0:
-		return _debug_forced_stage
-
 	return int(_enemies_defeated / ENEMIES_PER_GAME_STAGE) + 1
 
 
@@ -538,6 +535,9 @@ func _get_enemy_pool_for_current_stage() -> Array[PackedScene]:
 		skeleton_scene,
 		ENEMY_SPIDER_SCENE,
 	]
+
+	if _is_shield_skeleton_stage_range():
+		enemy_pool.append(ENEMY_GHOST_SCENE)
 
 	if _current_game_stage >= HOBGOBLIN_UNLOCK_STAGE:
 		enemy_pool.append(ENEMY_HOBGOBLIN_SCENE)

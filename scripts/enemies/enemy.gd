@@ -133,19 +133,21 @@ func can_advance_on_current_tick() -> bool:
 	return true
 
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int) -> bool:
 	if _is_dead:
-		return
+		return false
 
 	var applied_damage: int = maxi(amount, 0)
 	if applied_damage <= 0:
-		return
+		return false
 
 	_current_health = maxi(_current_health - applied_damage, 0)
 	_play_hit_flash()
 
 	if _current_health == 0:
 		_die()
+
+	return true
 
 
 func freeze() -> void:

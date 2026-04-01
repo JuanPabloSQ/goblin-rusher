@@ -72,10 +72,9 @@ func _process(delta: float) -> void:
 
 
 func _impact() -> void:
-	impacted.emit()
-
 	if is_instance_valid(_target) and _target.is_alive() and damage > 0:
-		_target.take_damage(damage)
+		if _target.take_damage(damage):
+			impacted.emit()
 
 	queue_free()
 

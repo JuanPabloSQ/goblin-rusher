@@ -12,12 +12,14 @@ func _ready() -> void:
 	super._ready()
 
 
-func take_damage(amount: int) -> void:
+func take_damage(amount: int) -> bool:
 	var had_shield: bool = _has_shield_layer()
-	super.take_damage(amount)
+	var was_hit: bool = super.take_damage(amount)
 
-	if had_shield and not _has_shield_layer() and is_alive():
+	if was_hit and had_shield and not _has_shield_layer() and is_alive():
 		queue_redraw()
+
+	return was_hit
 
 
 func _has_shield_layer() -> bool:
