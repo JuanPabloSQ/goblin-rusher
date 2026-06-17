@@ -6,7 +6,9 @@ const ENEMY_SHIELD_SKELETON_SCENE: PackedScene = preload("res://scenes/enemies/e
 const ENEMY_GHOST_SCENE: PackedScene = preload("res://scenes/enemies/enemy_ghost.tscn")
 const ENEMY_SPIDER_SCENE: PackedScene = preload("res://scenes/enemies/enemy_spider.tscn")
 const ENEMY_HOBGOBLIN_SCENE: PackedScene = preload("res://scenes/enemies/enemy_hobgoblin.tscn")
+const ENEMY_ZOMBIE_SCENE: PackedScene = preload("res://scenes/enemies/enemy_zombie.tscn")
 const ENEMY_ABOMINATION_SCENE: PackedScene = preload("res://scenes/enemies/enemy_abomination.tscn")
+const ENEMY_LICH_SCENE: PackedScene = preload("res://scenes/enemies/enemy_lich.tscn")
 const CLICK_DAMAGE: int = 1
 const PLAYER_STARTING_HEALTH: int = 10
 const ENEMY_ATTACK_INTERVAL: float = 2.0
@@ -18,7 +20,9 @@ const MINIMUM_SPAWN_DELAY: float = 2.0
 const SHIELD_SKELETON_START_STAGE: int = 11
 const SHIELD_SKELETON_END_STAGE: int = 20
 const HOBGOBLIN_UNLOCK_STAGE: int = 5
+const ZOMBIE_SUB_BOSS_STAGE: int = 15
 const ABOMINATION_BOSS_STAGE: int = 10
+const LICH_BOSS_STAGE: int = 20
 const BOSS_TRANSITION_DELAY: float = 2.0
 const HOVER_AUTO_FIRE_UPGRADE: StringName = &"hover_auto_fire"
 const HOVER_AUTO_FIRE_INTERVAL: float = 0.32
@@ -179,6 +183,10 @@ func _on_enemy_died(dead_enemy: Enemy) -> void:
 		_start_boss_transition()
 		return
 
+	if _is_forced_boss_pending():
+		_begin_forced_boss_encounter()
+		return
+
 	if not _is_game_over and not _is_paused and respawn_timer.is_stopped():
 		_schedule_next_spawn()
 
@@ -187,7 +195,7 @@ func _on_respawn_timer_timeout() -> void:
 	if _is_game_over or _is_paused or _is_boss_transitioning:
 		return
 
-	if _has_active_boss_enemy():
+	if _has_active_boss_enemy() or _is_forced_boss_pending():
 		return
 
 	_spawn_enemy_wave()
@@ -217,8 +225,9 @@ func _spawn_enemy_wave() -> void:
 
 
 func _create_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
-	if _should_spawn_abomination_boss():
-		return _create_boss_enemy_for_available_paths(available_paths)
+	var forced_boss_scene: PackedScene = _get_forced_boss_scene_for_current_stage()
+	if forced_boss_scene != null:
+		return _create_boss_enemy_for_available_paths(forced_boss_scene, available_paths)
 
 	var shuffled_scenes: Array[PackedScene] = _get_enemy_pool_for_current_stage()
 	shuffled_scenes.shuffle()
@@ -242,8 +251,28 @@ func _create_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
 	return null
 
 
-func _create_boss_enemy_for_available_paths(available_paths: Array[int]) -> Enemy:
-	var boss_enemy: Enemy = ENEMY_ABOMINATION_SCENE.instantiate() as Enemy
+func _create_specific_enemy_for_available_paths(enemy_scene: PackedScene, available_paths: Array[int]) -> Enemy:
+	var enemy_instance: Enemy = enemy_scene.instantiate() as Enemy
+	if enemy_instance == null:
+		return null
+
+	var valid_paths: Array[int] = []
+
+	for path_type in available_paths:
+		if enemy_instance.can_use_path(path_type):
+			valid_paths.append(path_type)
+
+	if valid_paths.is_empty():
+		enemy_instance.queue_free()
+		return null
+
+	valid_paths.shuffle()
+	enemy_instance.set_meta("spawn_path_type", valid_paths[0])
+	return enemy_instance
+
+
+func _create_boss_enemy_for_available_paths(boss_scene: PackedScene, available_paths: Array[int]) -> Enemy:
+	var boss_enemy: Enemy = boss_scene.instantiate() as Enemy
 	var valid_paths: Array[int] = []
 
 	for path_type in available_paths:
@@ -283,6 +312,21 @@ func _on_projectile_impacted() -> void:
 	hud.play_hit_flash()
 
 
+func _on_enemy_projectile_clicked(projectile: ZombieVomitProjectile) -> void:
+	if _is_game_over or _is_paused or _is_boss_transitioning:
+		return
+
+	if not is_instance_valid(projectile):
+		return
+
+	goblin_hands.play_throw()
+	projectile.take_damage(CLICK_DAMAGE)
+
+
+func _on_enemy_projectile_hit_player(damage: int) -> void:
+	_apply_player_damage(damage)
+
+
 func _on_enemy_attack_timer_timeout() -> void:
 	if _is_game_over or _is_paused or _is_boss_transitioning:
 		return
@@ -291,8 +335,9 @@ func _on_enemy_attack_timer_timeout() -> void:
 
 	var total_damage: int = 0
 	for enemy in _active_enemies:
-		if enemy.is_at_final_slot():
-			total_damage += enemy.get_contact_damage()
+		total_damage += enemy.get_attack_damage()
+		if enemy.can_use_special_attack():
+			enemy.perform_special_attack(projectile_layer, _get_player_target_position())
 
 	if total_damage <= 0:
 		return
@@ -403,6 +448,7 @@ func _on_resume_requested() -> void:
 func _on_debug_stage_requested(requested_stage: int) -> void:
 	var clamped_stage: int = maxi(requested_stage, 1)
 	_enemies_defeated = (clamped_stage - 1) * ENEMIES_PER_GAME_STAGE
+	_clear_active_combatants()
 	_refresh_stage_state()
 	_schedule_next_spawn()
 	hud.set_debug_feedback("Etapa forzada: %d" % _current_game_stage, Color(0.62, 0.94, 0.48, 1.0))
@@ -438,7 +484,7 @@ func _schedule_next_spawn() -> void:
 	if _is_game_over:
 		return
 
-	if _has_active_boss_enemy():
+	if _has_active_boss_enemy() or _is_forced_boss_pending():
 		respawn_timer.stop()
 		return
 
@@ -539,7 +585,9 @@ func _get_enemy_pool_for_current_stage() -> Array[PackedScene]:
 	if _is_shield_skeleton_stage_range():
 		enemy_pool.append(ENEMY_GHOST_SCENE)
 
-	if _current_game_stage >= HOBGOBLIN_UNLOCK_STAGE:
+	if _current_game_stage >= ZOMBIE_SUB_BOSS_STAGE:
+		enemy_pool.append(ENEMY_ZOMBIE_SCENE)
+	elif _current_game_stage >= HOBGOBLIN_UNLOCK_STAGE:
 		enemy_pool.append(ENEMY_HOBGOBLIN_SCENE)
 
 	return enemy_pool
@@ -578,8 +626,17 @@ func _on_boss_transition_finished() -> void:
 	_schedule_next_spawn()
 
 
-func _should_spawn_abomination_boss() -> bool:
-	return _current_game_stage == ABOMINATION_BOSS_STAGE and _get_next_stage_enemy_number() == ENEMIES_PER_GAME_STAGE
+func _get_forced_boss_scene_for_current_stage() -> PackedScene:
+	if not _is_forced_boss_pending():
+		return null
+
+	if _current_game_stage == ABOMINATION_BOSS_STAGE:
+		return ENEMY_ABOMINATION_SCENE
+
+	if _current_game_stage == LICH_BOSS_STAGE:
+		return ENEMY_LICH_SCENE
+
+	return null
 
 
 func _get_next_stage_enemy_number() -> int:
@@ -594,6 +651,73 @@ func _has_active_boss_enemy() -> bool:
 	return false
 
 
+func _get_player_target_position() -> Vector2:
+	var viewport_size: Vector2 = get_viewport_rect().size
+	return Vector2(viewport_size.x * 0.5, viewport_size.y - 28.0)
+
+
+func _clear_active_combatants() -> void:
+	for enemy in _active_enemies:
+		if is_instance_valid(enemy):
+			enemy.queue_free()
+
+	_active_enemies.clear()
+
+	for projectile in projectile_layer.get_children():
+		projectile.queue_free()
+
+
+func _clear_active_non_boss_enemies() -> void:
+	var remaining_enemies: Array[Enemy] = []
+
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+
+		if enemy.is_boss_enemy():
+			remaining_enemies.append(enemy)
+			continue
+
+		enemy.queue_free()
+
+	_active_enemies = remaining_enemies
+
+	for projectile in projectile_layer.get_children():
+		projectile.queue_free()
+
+
+func _is_forced_boss_pending() -> bool:
+	var kills_in_stage: int = _enemies_defeated % ENEMIES_PER_GAME_STAGE
+	return _is_forced_boss_stage(_current_game_stage) and kills_in_stage == ENEMIES_PER_GAME_STAGE - 1 and not _has_active_boss_enemy()
+
+
+func _is_forced_boss_stage(game_stage: int) -> bool:
+	return game_stage == ABOMINATION_BOSS_STAGE or game_stage == LICH_BOSS_STAGE
+
+
+func _begin_forced_boss_encounter() -> void:
+	if _is_game_over or _is_paused or _is_boss_transitioning:
+		return
+
+	var boss_scene: PackedScene = _get_forced_boss_scene_for_current_stage()
+	if boss_scene == null:
+		return
+
+	_clear_active_non_boss_enemies()
+	respawn_timer.stop()
+
+	var available_paths: Array[int] = _get_spawnable_paths()
+	if available_paths.is_empty():
+		return
+
+	var boss_enemy: Enemy = _create_boss_enemy_for_available_paths(boss_scene, available_paths)
+	if boss_enemy == null:
+		return
+
+	var spawn_path_type: int = int(boss_enemy.get_meta("spawn_path_type"))
+	_finish_spawning_enemy(boss_enemy, spawn_path_type)
+
+
 func _fire_projectile_at_enemy(target_enemy: Enemy) -> void:
 	if not is_instance_valid(target_enemy) or not target_enemy.is_alive():
 		return
@@ -606,6 +730,14 @@ func _fire_projectile_at_enemy(target_enemy: Enemy) -> void:
 	projectile.impacted.connect(_on_projectile_impacted)
 	projectile.global_position = goblin_hands.get_right_hand_spawn_global_position()
 	projectile.setup(target_enemy, CLICK_DAMAGE)
+
+
+func register_enemy_projectile(projectile: ZombieVomitProjectile) -> void:
+	if projectile == null:
+		return
+
+	projectile.clicked.connect(_on_enemy_projectile_clicked)
+	projectile.hit_player.connect(_on_enemy_projectile_hit_player)
 
 
 func _on_enemy_hover_started(enemy: Enemy) -> void:

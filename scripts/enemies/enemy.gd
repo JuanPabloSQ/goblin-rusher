@@ -116,6 +116,21 @@ func get_contact_damage() -> int:
 	return maxi(contact_damage, 1)
 
 
+func get_attack_damage() -> int:
+	if is_at_final_slot():
+		return get_contact_damage()
+
+	return 0
+
+
+func can_use_special_attack() -> bool:
+	return false
+
+
+func perform_special_attack(_projectile_layer: Node2D, _player_target_position: Vector2) -> void:
+	pass
+
+
 func is_boss_enemy() -> bool:
 	return boss_enemy
 
